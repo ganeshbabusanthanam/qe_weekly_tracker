@@ -5,21 +5,22 @@ from datetime import datetime
 import json
 from dotenv import load_dotenv
 import os
+from sqlalchemy import create_engine
+
 
 # Azure SQL Database connection
 def init_db():
     try:
-        connection_string = (
-            f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-            f"SERVER={st.secrets['db_server']};"
-            f"DATABASE={st.secrets['db_name']};"
-            f"UID={st.secrets['db_user']};"
-            f"PWD={st.secrets['db_password']}"
-        )
-        conn = pyodbc.connect(connection_string)
+        server = st.secrets["db_server"]
+        database = st.secrets["db_name"]
+        username = st.secrets["db_user"]
+        password = st.secrets["db_password"]
+        connection_url = f"mssql+pytds://{username}:{password}@{server}:1433/{database}"
+        engine = create_engine(connection_url)
+        conn = engine.connect()
         return conn
     except Exception as e:
-        st.error(f"Failed to connect to Azure SQL: {str(e)}")
+        st.error(f"DB Connection Failed: {e}")
         raise
 
 

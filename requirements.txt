@@ -3,3 +3,4 @@ pyodbc
 pandas
 python-dotenv
 pdfkit
+sqlalchemy
