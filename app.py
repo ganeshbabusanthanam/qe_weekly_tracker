@@ -164,19 +164,18 @@ elif option == "View Reports":
     import tempfile
 
     st.header("Project Report Generator")
+
     with st.form("report_form"):
         report_type = st.selectbox("Report Type", ["Weekly Summary", "Project History"])
         week_ending_date = st.date_input("Select Week Ending Date")
-        c = conn.cursor()
-        c.execute("SELECT project_id, project_name FROM Projects")
-        projects = c.fetchall()
-        project_dict = {name: id for id, name in projects}
+        # Fetch projects for dropdown
+        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+        project_dict = {row.project_name: row.project_id for row in projects}
         project_name = st.selectbox("Select Project (Optional)", ["All"] + list(project_dict.keys()))
         generate_report = st.form_submit_button("Generate Report")
 
     if generate_report:
-        c = conn.cursor()
-        query = """
+        base_query = """
             SELECT p.project_name, p.client_business_unit, p.project_manager, p.start_date, p.end_date, p.current_phase,
                    w.accomplishments, w.decisions_needed, w.milestones, w.status_indicator,
                    r.area, r.status, r.comment,
@@ -187,16 +186,16 @@ elif option == "View Reports":
             LEFT JOIN RAG_Status r ON w.update_id = r.update_id
             LEFT JOIN Risks_Issues ri ON w.update_id = ri.update_id
             LEFT JOIN Action_Items a ON w.update_id = a.update_id
-            WHERE CAST(w.week_ending_date AS DATE) = ?
+            WHERE CAST(w.week_ending_date AS DATE) = :week
         """
-        params = [str(week_ending_date)]
+        params = {'week': str(week_ending_date)}
         if project_name != "All":
-            query += " AND p.project_name = ?"
-            params.append(project_name)
+            base_query += " AND p.project_name = :project_name"
+            params['project_name'] = project_name
 
         try:
-            c.execute(query, params)
-            data = c.fetchall()
+            result = conn.execute(text(base_query), params)
+            data = result.fetchall()
 
             if data:
                 project_data = {}
