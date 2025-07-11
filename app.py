@@ -229,7 +229,7 @@ elif option == "View Reports":
                         project_data[project_key]['action_items'].append({
                             'description': row[17], 'status': row[18], 'client_input_required': row[19]
                         })
-
+ 
                 # Generate HTML for PDF
                 # html = "<h2 style='text-align:center;'>Weekly Report</h2>"
                 # html += f"<p style='text-align:center;'>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p><hr>"
