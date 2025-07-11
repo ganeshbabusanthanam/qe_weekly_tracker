@@ -236,38 +236,75 @@ elif option == "View Reports":
                         })
 
 
-                html = "<h2 style='text-align:center;'>Weekly Report</h2>"
-                html += f"<p style='text-align:center;'>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p><hr>"
+                # html = "<h2 style='text-align:center;'>Weekly Report</h2>"
+                # html += f"<p style='text-align:center;'>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p><hr>"
 
+                # for idx, (pname, details) in enumerate(project_data.items()):
+                #     html += f"""
+                #     <div style="{'page-break-before: always;' if idx != 0 else ''} font-family: Arial, sans-serif; padding: 20px;">
+                #         <h2 style="color:#003366;">{pname}</h2>
+                #         <p><strong>Client/BU:</strong> {details['client_business_unit']}<br>
+                #         <strong>Project Manager:</strong> {details['project_manager']}<br>
+                #         <strong>Duration:</strong> {details['start_date']} to {details['end_date']}<br>
+                #         <strong>Phase:</strong> {details['current_phase']}<br>
+                #         <strong>Status:</strong> <span style="color:{'green' if details['status_indicator']=='On Track' else 'red'}">{details['status_indicator']}</span></p>
+
+                #         <h4 style="color:#004080;">Accomplishments</h4>
+                #         <ul>{"".join([f"<li>{line}</li>" for line in details['accomplishments'].splitlines() if line])}</ul>
+
+                #         <h4 style="color:#004080;">Decisions Needed</h4>
+                #         <ul>{"".join([f"<li>{line}</li>" for line in details['decisions_needed'].splitlines() if line])}</ul>
+
+                #         <h4 style="color:#004080;">Milestones</h4>
+                #         <p>{details['milestones'] or "None"}</p>
+
+                #         <h4 style="color:#004080;">RAG Status</h4>
+                #         <ul>{"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}</ul>
+
+                #         <h4 style="color:#004080;">Risks & Issues</h4>
+                #         <ul>{"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}</ul>
+
+                #         <h4 style="color:#004080;">Action Items</h4>
+                #         <ul>{"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}</ul>
+                #     </div>
+                #     """
+
+                html = f"""
+                <h2 style='text-align:center; margin-bottom: 5px;'>Weekly Report</h2>
+                <p style='text-align:center; margin-bottom: 20px;'>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p>
+                """
+                
                 for idx, (pname, details) in enumerate(project_data.items()):
                     html += f"""
-                    <div style="{'page-break-before: always;' if idx != 0 else ''} font-family: Arial, sans-serif; padding: 20px;">
-                        <h2 style="color:#003366;">{pname}</h2>
-                        <p><strong>Client/BU:</strong> {details['client_business_unit']}<br>
-                        <strong>Project Manager:</strong> {details['project_manager']}<br>
-                        <strong>Duration:</strong> {details['start_date']} to {details['end_date']}<br>
-                        <strong>Phase:</strong> {details['current_phase']}<br>
-                        <strong>Status:</strong> <span style="color:{'green' if details['status_indicator']=='On Track' else 'red'}">{details['status_indicator']}</span></p>
-
-                        <h4 style="color:#004080;">Accomplishments</h4>
-                        <ul>{"".join([f"<li>{line}</li>" for line in details['accomplishments'].splitlines() if line])}</ul>
-
-                        <h4 style="color:#004080;">Decisions Needed</h4>
-                        <ul>{"".join([f"<li>{line}</li>" for line in details['decisions_needed'].splitlines() if line])}</ul>
-
-                        <h4 style="color:#004080;">Milestones</h4>
-                        <p>{details['milestones'] or "None"}</p>
-
-                        <h4 style="color:#004080;">RAG Status</h4>
-                        <ul>{"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}</ul>
-
-                        <h4 style="color:#004080;">Risks & Issues</h4>
-                        <ul>{"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}</ul>
-
-                        <h4 style="color:#004080;">Action Items</h4>
-                        <ul>{"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}</ul>
+                    <div style="{'page-break-before: always;' if idx > 0 else ''} font-family: Arial, sans-serif; padding: 10px 20px;">
+                        <h2 style="color:#003366; margin-bottom: 5px;">{pname}</h2>
+                        <p style="margin: 2px 0;"><strong>Client/BU:</strong> {details['client_business_unit']}</p>
+                        <p style="margin: 2px 0;"><strong>Project Manager:</strong> {details['project_manager']}</p>
+                        <p style="margin: 2px 0;"><strong>Duration:</strong> {details['start_date']} to {details['end_date']}</p>
+                        <p style="margin: 5px 0 10px 0;"><strong>Phase:</strong> {details['current_phase']} |
+                           <strong>Status:</strong> <span style="color:{'green' if details['status_indicator']=='On Track' else 'red'}">{details['status_indicator']}</span></p>
+                
+                        <h4 style="color:#004080; margin-bottom: 4px;">Accomplishments</h4>
+                        <ul style="margin-top: 0;">{"".join([f"<li>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()])}</ul>
+                
+                        <h4 style="color:#004080; margin-bottom: 4px;">Decisions Needed</h4>
+                        <ul style="margin-top: 0;">{"".join([f"<li>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()])}</ul>
+                
+                        <h4 style="color:#004080; margin-bottom: 4px;">Milestones</h4>
+                        <p style="margin-top: 0;">{details['milestones'] or "None"}</p>
+                
+                        <h4 style="color:#004080; margin-bottom: 4px;">RAG Status</h4>
+                        <ul style="margin-top: 0;">{"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}</ul>
+                
+                        <h4 style="color:#004080; margin-bottom: 4px;">Risks & Issues</h4>
+                        <ul style="margin-top: 0;">{"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}</ul>
+                
+                        <h4 style="color:#004080; margin-bottom: 4px;">Action Items</h4>
+                        <ul style="margin-top: 0;">{"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}</ul>
                     </div>
                     """
+                
+
 
                 # 🖥️ Display Preview (Streamlit-native)
                 st.markdown("## 📝 Report Preview")
