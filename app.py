@@ -32,7 +32,7 @@ st.title("Project Delivery Dashboard")
 
 # Sidebar for navigation
 st.sidebar.header("Navigation")
-option = st.sidebar.selectbox("Choose an option", ["Add Project", "Submit Weekly Update"])
+option = st.sidebar.selectbox("Choose an option", ["Add Project", "Submit Weekly Update", "View Reports"])
 
 # Add Project
 if option == "Add Project":
