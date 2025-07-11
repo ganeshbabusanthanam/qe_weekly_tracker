@@ -228,38 +228,7 @@ elif option == "View Reports":
                         project_data[project_key]['action_items'].append({
                             'description': row[17], 'status': row[18], 'client_input_required': row[19]
                         })
- 
-                # Generate HTML for PDF
-                # html = "<h2 style='text-align:center;'>Weekly Report</h2>"
-                # html += f"<p style='text-align:center;'>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p><hr>"
-                # for pname, details in project_data.items():
-                #     html += f"""
-                #     <h3>{pname}</h3>
-                #     <p><strong>Client/BU:</strong> {details['client_business_unit']}<br>
-                #     <strong>Project Manager:</strong> {details['project_manager']}<br>
-                #     <strong>Duration:</strong> {details['start_date']} to {details['end_date']}<br>
-                #     <strong>Phase:</strong> {details['current_phase']}<br>
-                #     <strong>Status:</strong> {details['status_indicator']}</p>
-                    
-                #     <h4>Accomplishments</h4>
-                #     <ul>{"".join([f"<li>{line}</li>" for line in details['accomplishments'].splitlines() if line])}</ul>
-                    
-                #     <h4>Decisions Needed</h4>
-                #     <ul>{"".join([f"<li>{line}</li>" for line in details['decisions_needed'].splitlines() if line])}</ul>
 
-                #     <h4>Milestones</h4>
-                #     <p>{details['milestones'] or "None"}</p>
-
-                #     <h4>RAG Status</h4>
-                #     <ul>{"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}</ul>
-
-                #     <h4>Risks & Issues</h4>
-                #     <ul>{"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}</ul>
-
-                #     <h4>Action Items</h4>
-                #     <ul>{"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}</ul>
-                #     <hr>
-                #     """
 
                 html = "<h2 style='text-align:center;'>Weekly Report</h2>"
                 html += f"<p style='text-align:center;'>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p><hr>"
@@ -293,8 +262,6 @@ elif option == "View Reports":
                         <ul>{"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}</ul>
                     </div>
                     """
-
-
 
                 # 🖥️ Display Preview (Streamlit-native)
                 st.markdown("## 📝 Report Preview")
@@ -352,92 +319,6 @@ elif option == "View Reports":
         except Exception as e:
             st.error(f"Error generating report: {str(e)}")
 
-
-            
-            # Chart for RAG Status Distribution
-            c.execute(
-                "SELECT area, status, COUNT(*) FROM RAG_Status r JOIN Weekly_Updates w ON r.update_id = w.update_id WHERE CAST(w.week_ending_date AS DATE) = ? GROUP BY area, status",
-                (str(week_ending_date),)
-            )
-            rag_counts = c.fetchall()
-            
-            if rag_counts:
-                areas = list(set([x[0] for x in rag_counts]))
-                green_counts = [0] * len(areas)
-                amber_counts = [0] * len(areas)
-                red_counts = [0] * len(areas)
-                
-                for area, status, count in rag_counts:
-                    idx = areas.index(area)
-                    if status == "Green":
-                        green_counts[idx] = count
-                    elif status == "Amber":
-                        amber_counts[idx] = count
-                    elif status == "Red":
-                        red_counts[idx] = count
-                
-                st.markdown("## RAG Status Distribution")
-                st.write("""
-                ```chartjs
-                {
-                    "type": "bar",
-                    "data": {
-                        "labels": """ + json.dumps(areas) + """,
-                        "datasets": [
-                            {
-                                "label": "Green",
-                                "data": """ + json.dumps(green_counts) + """,
-                                "backgroundColor": "#00FF00",
-                                "borderColor": "#00CC00",
-                                "borderWidth": 1
-                            },
-                            {
-                                "label": "Amber",
-                                "data": """ + json.dumps(amber_counts) + """,
-                                "backgroundColor": "#FFA500",
-                                "borderColor": "#CC8400",
-                                "borderWidth": 1
-                            },
-                            {
-                                "label": "Red",
-                                "data": """ + json.dumps(red_counts) + """,
-                                "backgroundColor": "#FF0000",
-                                "borderColor": "#CC0000",
-                                "borderWidth": 1
-                            }
-                        ]
-                    },
-                    "options": {
-                        "plugins": {
-                            "title": {
-                                "display": true,
-                                "text": "RAG Status Distribution by Area",
-                                "font": {
-                                    "size": 18
-                                }
-                            }
-                        },
-                        "scales": {
-                            "y": {
-                                "beginAtZero": true,
-                                "title": {
-                                    "display": true,
-                                    "text": "Count"
-                                }
-                            },
-                            "x": {
-                                "title": {
-                                    "display": true,
-                                    "text": "Area"
-                                }
-                            }
-                        }
-                    }
-                }
-                ```
-                """)
-            else:
-                st.warning(f"No RAG status data available for {week_ending_date.strftime('%Y-%m-%d')}.")
 
 # Close database connection
 conn.close()
