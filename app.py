@@ -6,6 +6,7 @@ import os
 from sqlalchemy import create_engine, text
 from xhtml2pdf import pisa
 import io
+import html
 
 # Azure SQL Database connection
 def init_db():
@@ -23,11 +24,16 @@ def init_db():
         raise
 
 def convert_html_to_pdf(html_content):
-    result = io.BytesIO()
-    pdf = pisa.pisaDocument(io.StringIO(html_content), dest=result)
-    if not pdf.err:
-        return result.getvalue()
-    return None
+    try:
+        result = io.BytesIO()
+        pdf = pisa.pisaDocument(io.StringIO(html_content), dest=result)
+        if not pdf.err:
+            return result.getvalue()
+        st.error(f"xhtml2pdf error: {pdf.err}")
+        return None
+    except Exception as e:
+        st.error(f"xhtml2pdf failed: {str(e)}")
+        return None
 
 # Initialize database connection
 conn = init_db()
@@ -203,41 +209,48 @@ elif option == "View Reports":
             if data:
                 project_data = {}
                 for row in data:
-                    project_key = row[0]
+                    project_key = html.escape(row[0])  # Sanitize project name
                     if project_key not in project_data:
                         project_data[project_key] = {
-                            'client_business_unit': row[1],
-                            'project_manager': row[2],
+                            'client_business_unit': html.escape(row[1] or ''),
+                            'project_manager': html.escape(row[2] or ''),
                             'start_date': row[3],
                             'end_date': row[4],
-                            'current_phase': row[5],
-                            'accomplishments': row[6],
-                            'decisions_needed': row[7],
-                            'milestones': row[8],
-                            'status_indicator': row[9],
+                            'current_phase': html.escape(row[5] or ''),
+                            'accomplishments': html.escape(row[6] or ''),
+                            'decisions_needed': html.escape(row[7] or ''),
+                            'milestones': html.escape(row[8] or ''),
+                            'status_indicator': html.escape(row[9] or ''),
                             'rag_status': [],
                             'risks_issues': [],
                             'action_items': []
                         }
                     if row[10]:
                         project_data[project_key]['rag_status'].append({
-                            'area': row[10], 'status': row[11], 'comment': row[12]
+                            'area': html.escape(row[10]), 
+                            'status': html.escape(row[11]), 
+                            'comment': html.escape(row[12] or '')
                         })
                     if row[13]:
                         project_data[project_key]['risks_issues'].append({
-                            'type': row[13], 'description': row[14], 'owner': row[15], 'mitigation_eta': row[16]
+                            'type': html.escape(row[13]), 
+                            'description': html.escape(row[14]), 
+                            'owner': html.escape(row[15]), 
+                            'mitigation_eta': html.escape(row[16])
                         })
                     if row[17]:
                         project_data[project_key]['action_items'].append({
-                            'description': row[17], 'status': row[18], 'client_input_required': row[19]
+                            'description': html.escape(row[17]), 
+                            'status': html.escape(row[18]), 
+                            'client_input_required': row[19]
                         })
 
                 # Generate HTML for PDF
-                html = """
+                html_content = """
                 <html>
                 <head>
                     <style>
-                        body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; margin: 0.5in; line-height: 1.2; }
+                        body { font-family: Times New Roman, Times, serif; font-size: 12pt; margin: 0.5in; line-height: 1.2; }
                         h1 { font-size: 18pt; text-align: center; color: #003366; margin: 10px 0; }
                         h2 { font-size: 14pt; color: #003366; margin: 8px 0; }
                         h3 { font-size: 12pt; color: #004080; margin: 6px 0; }
@@ -261,7 +274,7 @@ elif option == "View Reports":
 
                 for idx, (pname, project) in enumerate(project_data.items()):
                     rag_status = "".join(
-                        f"<li><strong>{rag['area']}</strong>: <span class='rag-{rag['status'].lower()}'>{rag['status']}</span> - {rag['comment'] or 'No comment'}</li>"
+                        f"<li><strong>{rag['area']}</strong>: <span class='rag-{rag['status'].lower()}'>{rag['status']}</span> - {rag['comment']}</li>"
                         for rag in project['rag_status']
                     ) or "<li>No RAG status available</li>"
                     risks_issues = "".join(
@@ -274,7 +287,7 @@ elif option == "View Reports":
                     ) or "<li>No action items</li>"
 
                     page_break = "page-break-before: always;" if idx != 0 else ""
-                    html += f"""
+                    html_content += f"""
                     <div class="project-container" style="{page_break}">
                         <h2>{pname}</h2>
                         <table>
@@ -300,10 +313,15 @@ elif option == "View Reports":
                     <hr>
                     """
 
-                html += """
+                html_content += """
                 </body>
                 </html>
                 """
+
+                # Debug: Save HTML to file for inspection
+                with open("debug_report.html", "w", encoding="utf-8") as f:
+                    f.write(html_content)
+                st.info("HTML content saved to debug_report.html for inspection.")
 
                 # Generate LaTeX for fallback
                 latex_content = r"""
@@ -470,7 +488,7 @@ elif option == "View Reports":
 
                 # Generate PDF & Download Button
                 try:
-                    pdf = convert_html_to_pdf(html)
+                    pdf = convert_html_to_pdf(html_content)
                     if pdf:
                         st.download_button(
                             label="Download PDF Report",
@@ -479,7 +497,7 @@ elif option == "View Reports":
                             mime="application/pdf"
                         )
                     else:
-                        st.error("Failed to generate PDF.")
+                        st.error("Failed to generate PDF. Check debug_report.html for issues.")
                         latex_file = io.StringIO(latex_content)
                         st.download_button(
                             label="Download Report as LaTeX (Compile to PDF)",
