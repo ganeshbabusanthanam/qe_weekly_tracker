@@ -18,7 +18,7 @@ def init_db():
         connection_url = f"mssql+pymssql://{username}:{password}@{server}:1433/{database}"
         engine = create_engine(connection_url)
         conn = engine.connect()
-        return conn
+        return conn, engine  # Return both connection and engine for proper cleanup
     except Exception as e:
         st.error(f"DB Connection Failed: {e}")
         raise
@@ -31,7 +31,7 @@ def convert_html_to_pdf(html_content):
     return None
 
 # Initialize database connection
-conn = init_db()
+conn, engine = init_db()
 
 # Streamlit App
 st.title("Project Delivery Dashboard")
@@ -53,26 +53,40 @@ if option == "Add Project":
         submit_project = st.form_submit_button("Submit Project")
 
         if submit_project:
-            try:
-                insert_stmt = text("""
-                    INSERT INTO Projects (project_name, client_business_unit, project_manager, start_date, end_date, current_phase)
-                    OUTPUT INSERTED.project_id
-                    VALUES (:name, :client, :manager, :start, :end, :phase)
-                """)
-                result = conn.execute(insert_stmt, {
-                    'name': project_name,
-                    'client': client_business_unit,
-                    'manager': project_manager,
-                    'start': str(start_date),
-                    'end': str(end_date),
-                    'phase': current_phase
-                })
-                conn.commit()
-                project_id = result.fetchone()[0]
-                st.success(f"Project added successfully with project_id: {project_id}")
-            except Exception as e:
-                st.error(f"Failed to add project: {e}")
-                raise
+            # Validate inputs
+            if not all([project_name, client_business_unit, project_manager, start_date, end_date]):
+                st.error("All fields are required!")
+            elif start_date > end_date:
+                st.error("Start Date cannot be later than End Date!")
+            else:
+                try:
+                    # Ensure connection is active
+                    conn.execute(text("SELECT 1"))  # Test query to verify connection
+                    insert_stmt = text("""
+                        INSERT INTO Projects (project_name, client_business_unit, project_manager, start_date, end_date, current_phase)
+                        OUTPUT INSERTED.project_id
+                        VALUES (:name, :client, :manager, :start, :end, :phase)
+                    """)
+                    result = conn.execute(insert_stmt, {
+                        'name': project_name.strip(),
+                        'client': client_business_unit.strip(),
+                        'manager': project_manager.strip(),
+                        'start': str(start_date),
+                        'end': str(end_date),
+                        'phase': current_phase
+                    })
+                    row = result.fetchone()
+                    if row is None:
+                        st.error("Failed to insert project: No project_id returned. Check database constraints or schema.")
+                    else:
+                        project_id = row[0]
+                        conn.commit()
+                        st.success(f"Project added successfully with project_id: {project_id}")
+                except Exception as e:
+                    st.error(f"Failed to add project: {e}")
+                    # Log additional details for debugging
+                    st.write("Debug Info: Check if 'Projects' table exists and has an auto-incrementing 'project_id' column.")
+                    raise
 
 # Submit Weekly Update
 elif option == "Submit Weekly Update":
@@ -356,3 +370,4 @@ elif option == "View Reports":
 
 # Close database connection
 conn.close()
+engine.dispose()
