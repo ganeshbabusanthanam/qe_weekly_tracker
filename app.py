@@ -242,13 +242,15 @@ elif option == "View Reports":
                            <strong>Status:</strong> <span style="color:{'green' if details['status_indicator']=='On Track' else 'red'}">{details['status_indicator']}</span></p>
 
                         <h4 style="color:#004080;">Accomplishments</h4>
+
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()])}
+                            {"".join([f"<li style='margin: 2px 0;'>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()])}
                         </ul>
+
 
                         <h4 style="color:#004080;">Decisions Needed</h4>
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()])}
+                            {"".join([f"<li style='margin: 2px 0;'>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()])}
                         </ul>
 
                         <h4 style="color:#004080;">Milestones</h4>
@@ -256,18 +258,21 @@ elif option == "View Reports":
 
                         <h4 style="color:#004080;">RAG Status</h4>
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}
+                            {"".join([f"<li style='margin: 2px 0;'><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}
                         </ul>
+
 
                         <h4 style="color:#004080;">Risks & Issues</h4>
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}
+                            {"".join([f"<li style='margin: 2px 0;'><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}
                         </ul>
+
 
                         <h4 style="color:#004080;">Action Items</h4>
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}
+                            {"".join([f"<li style='margin: 2px 0;'>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}
                         </ul>
+
                     </div>
                     """
 
