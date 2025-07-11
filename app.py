@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 from dotenv import load_dotenv
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 
 # Azure SQL Database connection
@@ -32,7 +32,7 @@ st.title("Project Delivery Dashboard")
 
 # Sidebar for navigation
 st.sidebar.header("Navigation")
-option = st.sidebar.selectbox("Choose an option", ["Add Project", "Submit Weekly Update", "View Reports"])
+option = st.sidebar.selectbox("Choose an option", ["Add Project", "Submit Weekly Update"])
 
 # Add Project
 if option == "Add Project":
@@ -45,40 +45,38 @@ if option == "Add Project":
         end_date = st.date_input("End Date")
         current_phase = st.selectbox("Current Phase", ["Build", "Test", "UAT", "Go-Live"])
         submit_project = st.form_submit_button("Submit Project")
-        
+
         if submit_project:
             try:
-                c = conn.cursor()
-                c.execute(
-                    "INSERT INTO Projects (project_name, client_business_unit, project_manager, start_date, end_date, current_phase) OUTPUT INSERTED.project_id VALUES (?, ?, ?, ?, ?, ?)",
-                    (project_name, client_business_unit, project_manager, str(start_date), str(end_date), current_phase)
-                )
-                project_id_row = c.fetchone()
-                if project_id_row is None or project_id_row[0] is None:
-                    st.error("Failed to retrieve project_id from Projects insert. Check if project_id is an IDENTITY column and user permissions.")
-                    raise ValueError("INSERT OUTPUT clause returned None for project_id.")
-                project_id = int(project_id_row[0])
+                insert_stmt = text("""
+                    INSERT INTO Projects (project_name, client_business_unit, project_manager, start_date, end_date, current_phase)
+                    OUTPUT INSERTED.project_id
+                    VALUES (:name, :client, :manager, :start, :end, :phase)
+                """)
+                result = conn.execute(insert_stmt, {
+                    'name': project_name,
+                    'client': client_business_unit,
+                    'manager': project_manager,
+                    'start': str(start_date),
+                    'end': str(end_date),
+                    'phase': current_phase
+                })
                 conn.commit()
-                st.success(f"Project added successfully with project_id: {project_id}!")
-            except pyodbc.Error as e:
-                st.error(f"Failed to add project: {str(e)}")
-                raise
-            except ValueError as e:
-                st.error(f"Error: {str(e)}")
+                project_id = result.fetchone()[0]
+                st.success(f"Project added successfully with project_id: {project_id}")
+            except Exception as e:
+                st.error(f"Failed to add project: {e}")
                 raise
 
 # Submit Weekly Update
 elif option == "Submit Weekly Update":
     st.header("Weekly Project Update")
-    c = conn.cursor()
-    c.execute("SELECT project_id, project_name FROM Projects")
-    projects = c.fetchall()
-    project_dict = {name: id for id, name in projects}
-    
+    projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+    project_dict = {row.project_name: row.project_id for row in projects}
+
     if not project_dict:
         st.error("No projects found in the database. Please add a project first using the 'Add Project' section.")
     else:
-        st.write(f"Available projects: {list(project_dict.keys())}")
         with st.form("update_form"):
             project_name = st.selectbox("Select Project", list(project_dict.keys()))
             week_ending_date = st.date_input("Week Ending Date")
@@ -86,94 +84,76 @@ elif option == "Submit Weekly Update":
             decisions_needed = st.text_area("Key Decisions Needed / Escalations (1-2 bullets)")
             milestones = st.text_input("Key Milestones")
             status_indicator = st.selectbox("Status Indicator", ["On Track", "Delayed"])
-            
+
             st.subheader("RAG Status")
             rag_areas = ["Scope", "Timeline", "Cost", "Quality", "Resources"]
             rag_data = {}
             for area in rag_areas:
-                st.write(f"{area}")
                 status = st.selectbox(f"Status for {area}", ["Green", "Amber", "Red"], key=f"rag_{area}")
                 comment = st.text_input(f"Comment for {area}", key=f"comment_{area}")
                 rag_data[area] = {"status": status, "comment": comment}
-            
+
             st.subheader("Risks & Issues")
             risks = st.text_area("Top 2 Risks (Description, Owner, Mitigation)")
             issues = st.text_area("Top 2 Issues (Description, Owner, ETA)")
-            
+
             st.subheader("Action Items / Dependencies")
             action_items = st.text_area("Pending Actions")
             client_inputs = st.checkbox("Client Inputs / Approvals Required")
-            
+
             submit_update = st.form_submit_button("Submit Update")
-            
             if submit_update:
                 try:
-                    c = conn.cursor()
-                    # Validate project_id
-                    project_id = project_dict.get(project_name)
-                    if not project_id:
-                        st.error(f"Invalid project selected: {project_name}")
-                        raise ValueError(f"Project {project_name} not found in project_dict")
-                    
-                    # Verify project_id exists
-                    c.execute("SELECT COUNT(*) FROM Projects WHERE project_id = ?", (project_id,))
-                    if c.fetchone()[0] == 0:
-                        st.error(f"project_id {project_id} does not exist in Projects table.")
-                        raise ValueError(f"project_id {project_id} not found in Projects table.")
-                    
-                    # Debug: Log insert parameters
-                    st.write(f"Inserting Weekly Update with parameters: project_id={project_id}, week_ending_date={str(week_ending_date)}, accomplishments={accomplishments[:20]}..., decisions_needed={decisions_needed[:20]}..., milestones={milestones}, status_indicator={status_indicator}")
-                    
-                    # Insert Weekly Update
-                    c.execute(
-                        "INSERT INTO Weekly_Updates (project_id, week_ending_date, accomplishments, decisions_needed, milestones, status_indicator) OUTPUT INSERTED.update_id VALUES (?, ?, ?, ?, ?, ?)",
-                        (project_id, str(week_ending_date), accomplishments, decisions_needed, milestones, status_indicator)
-                    )
-                    update_id_row = c.fetchone()
-                    if update_id_row is None or update_id_row[0] is None:
-                        st.error("Failed to retrieve update_id from Weekly_Updates insert. Check if update_id is an IDENTITY column, permissions, or triggers.")
-                        raise ValueError("INSERT OUTPUT clause returned None for update_id.")
-                    update_id = int(update_id_row[0])
-                    
-                    conn.commit()
-                    st.write(f"Inserted Weekly Update with update_id: {update_id}")
-                    
-                    # Insert RAG Status
+                    project_id = project_dict[project_name]
+                    insert_update = text("""
+                        INSERT INTO Weekly_Updates (project_id, week_ending_date, accomplishments, decisions_needed, milestones, status_indicator)
+                        OUTPUT INSERTED.update_id
+                        VALUES (:pid, :week, :acc, :dec, :mile, :status)
+                    """)
+                    result = conn.execute(insert_update, {
+                        'pid': project_id,
+                        'week': str(week_ending_date),
+                        'acc': accomplishments,
+                        'dec': decisions_needed,
+                        'mile': milestones,
+                        'status': status_indicator
+                    })
+                    update_id = result.fetchone()[0]
+
                     for area, data in rag_data.items():
-                        c.execute(
-                            "INSERT INTO RAG_Status (update_id, area, status, comment) VALUES (?, ?, ?, ?)",
-                            (update_id, area, data["status"], data["comment"])
-                        )
-                    
-                    # Insert Risks and Issues
+                        conn.execute(text("INSERT INTO RAG_Status (update_id, area, status, comment) VALUES (:uid, :area, :status, :comment)"), {
+                            'uid': update_id,
+                            'area': area,
+                            'status': data['status'],
+                            'comment': data['comment']
+                        })
+
                     for risk in risks.split("\n"):
                         if risk.strip():
-                            c.execute(
-                                "INSERT INTO Risks_Issues (update_id, type, description, owner, mitigation_eta) VALUES (?, ?, ?, ?, ?)",
-                                (update_id, "Risk", risk, "TBD", "TBD")
-                            )
+                            conn.execute(text("INSERT INTO Risks_Issues (update_id, type, description, owner, mitigation_eta) VALUES (:uid, 'Risk', :desc, 'TBD', 'TBD')"), {
+                                'uid': update_id,
+                                'desc': risk
+                            })
+
                     for issue in issues.split("\n"):
                         if issue.strip():
-                            c.execute(
-                                "INSERT INTO Risks_Issues (update_id, type, description, owner, mitigation_eta) VALUES (?, ?, ?, ?, ?)",
-                                (update_id, "Issue", issue, "TBD", "TBD")
-                            )
-                    
-                    # Insert Action Items
+                            conn.execute(text("INSERT INTO Risks_Issues (update_id, type, description, owner, mitigation_eta) VALUES (:uid, 'Issue', :desc, 'TBD', 'TBD')"), {
+                                'uid': update_id,
+                                'desc': issue
+                            })
+
                     for action in action_items.split("\n"):
                         if action.strip():
-                            c.execute(
-                                "INSERT INTO Action_Items (update_id, description, status, client_input_required) VALUES (?, ?, ?, ?)",
-                                (update_id, action, "Pending", 1 if client_inputs else 0)
-                            )
-                    
+                            conn.execute(text("INSERT INTO Action_Items (update_id, description, status, client_input_required) VALUES (:uid, :desc, 'Pending', :client)"), {
+                                'uid': update_id,
+                                'desc': action,
+                                'client': 1 if client_inputs else 0
+                            })
+
                     conn.commit()
                     st.success("Weekly update submitted successfully!")
-                except pyodbc.Error as e:
-                    st.error(f"Failed to submit weekly update: {str(e)}")
-                    raise
-                except ValueError as e:
-                    st.error(f"Error: {str(e)}")
+                except Exception as e:
+                    st.error(f"Failed to submit weekly update: {e}")
                     raise
 
 # View Reports
