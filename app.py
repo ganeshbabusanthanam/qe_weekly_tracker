@@ -165,13 +165,9 @@ elif option == "View Reports":
         projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
         project_name = st.selectbox("Select Project (Optional)", ["All"] + list(project_dict.keys()))
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            generate_report = st.form_submit_button("Generate Report")
-        with col2:
-            download_report = st.form_submit_button("Download PDF Report")
+        generate_report = st.form_submit_button("Generate Report")
 
-    if generate_report or download_report:
+    if generate_report:
         base_query = """
                     SELECT p.project_name, p.client_business_unit, p.project_manager, p.start_date, p.end_date, p.current_phase,
                            w.accomplishments, w.decisions_needed, w.milestones, w.status_indicator,
@@ -298,62 +294,61 @@ elif option == "View Reports":
                 pdf_data = convert_html_to_pdf(html)
 
                 # Streamlit Preview and Download
-                if generate_report or download_report:
-                    if pdf_data:
-                        # Display preview
-                        if generate_report:
-                            st.markdown("## 📝 Report Preview")
-                            for pname, details in project_data.items():
-                                with st.container():
-                                    st.markdown(f"### {pname}")
-                                    col1, col2 = st.columns(2)
-                                    with col1:
-                                        st.markdown(f"**Client/BU**: {details['client_business_unit']}")
-                                        st.markdown(f"**Project Manager**: {details['project_manager']}")
-                                        st.markdown(f"**Phase**: {details['current_phase']}")
-                                    with col2:
-                                        st.markdown(f"**Start Date**: {details['start_date']}")
-                                        st.markdown(f"**End Date**: {details['end_date']}")
-                                        st.markdown(f"**Status**: {details['status_indicator']}")
-                                    st.subheader("Accomplishments")
-                                    for line in [l.strip() for l in details['accomplishments'].splitlines() if l.strip()]:
-                                        st.markdown(f"- {line}")
-                                    st.subheader("Decisions Needed")
-                                    for line in [l.strip() for l in details['decisions_needed'].splitlines() if l.strip()]:
-                                        st.markdown(f"- {line}")
-                                    st.subheader("Milestones")
-                                    st.markdown(details['milestones'] or "- None")
-                                    st.subheader("RAG Status")
-                                    if details['rag_status']:
-                                        for r in details['rag_status']:
-                                            st.markdown(f"- **{r['area']}**: {r['status']} - {r['comment'] or 'No comment'}")
-                                    else:
-                                        st.markdown("- No RAG status available")
-                                    st.subheader("Risks & Issues")
-                                    if details['risks_issues']:
-                                        for ri in details['risks_issues']:
-                                            st.markdown(f"- **{ri['type']}**: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})")
-                                    else:
-                                        st.markdown("- No risks or issues")
-                                    st.subheader("Action Items")
-                                    if details['action_items']:
-                                        for a in details['action_items']:
-                                            client_input = "Yes" if a['client_input_required'] else "No"
-                                            st.markdown(f"- {a['description']} - {a['status']} (Client Input: {client_input})")
-                                    else:
-                                        st.markdown("- No action items")
-                                    st.markdown("---")
+                if pdf_data:
+                    # Display preview
+                    st.markdown("## 📝 Report Preview")
+                    for pname, details in project_data.items():
+                        with st.container():
+                            st.markdown(f"### {pname}")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown(f"**Client/BU**: {details['client_business_unit']}")
+                                st.markdown(f"**Project Manager**: {details['project_manager']}")
+                                st.markdown(f"**Phase**: {details['current_phase']}")
+                            with col2:
+                                st.markdown(f"**Start Date**: {details['start_date']}")
+                                st.markdown(f"**End Date**: {details['end_date']}")
+                                st.markdown(f"**Status**: {details['status_indicator']}")
+                            st.subheader("Accomplishments")
+                            for line in [l.strip() for l in details['accomplishments'].splitlines() if l.strip()]:
+                                st.markdown(f"- {line}")
+                            st.subheader("Decisions Needed")
+                            for line in [l.strip() for l in details['decisions_needed'].splitlines() if l.strip()]:
+                                st.markdown(f"- {line}")
+                            st.subheader("Milestones")
+                            st.markdown(details['milestones'] or "- None")
+                            st.subheader("RAG Status")
+                            if details['rag_status']:
+                                for r in details['rag_status']:
+                                    st.markdown(f"- **{r['area']}**: {r['status']} - {r['comment'] or 'No comment'}")
+                            else:
+                                st.markdown("- No RAG status available")
+                            st.subheader("Risks & Issues")
+                            if details['risks_issues']:
+                                for ri in details['risks_issues']:
+                                    st.markdown(f"- **{ri['type']}**: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})")
+                            else:
+                                st.markdown("- No risks or issues")
+                            st.subheader("Action Items")
+                            if details['action_items']:
+                                for a in details['action_items']:
+                                    client_input = "Yes" if a['client_input_required'] else "No"
+                                    st.markdown(f"- {a['description']} - {a['status']} (Client Input: {client_input})")
+                            else:
+                                st.markdown("- No action items")
+                            st.markdown("---")
 
-                        # Download PDF
-                        if download_report:
-                            st.download_button(
-                                label="📄 Download PDF Report",
-                                data=pdf_data,
-                                file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf",
-                                mime="application/pdf"
-                            )
-                    else:
-                        st.error("Failed to generate PDF.")
+                    # Automatically initiate download
+                    st.download_button(
+                        label="📄 Download PDF Report",
+                        data=pdf_data,
+                        file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        key="auto_download",
+                        on_click=lambda: None  # No additional action needed
+                    )
+                else:
+                    st.error("Failed to generate PDF.")
             else:
                 st.warning("No data found for the selected week/project.")
         except Exception as e:
