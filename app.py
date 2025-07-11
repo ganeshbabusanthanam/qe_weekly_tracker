@@ -142,13 +142,6 @@ elif option == "Submit Weekly Update":
                                 'desc': risk
                             })
 
-                    for issue in issues.split("\n"):
-                        if issue.strip():
-                            conn.execute(text("INSERT INTO Risks_Issues (update_id, type, description, owner, mitigation_eta) VALUES (:uid, 'Issue', :desc, 'TBD', 'TBD')"), {
-                                'uid': update_id,
-                                'desc': issue
-                            })
-
                     for action in action_items.split("\n"):
                         if action.strip():
                             conn.execute(text("INSERT INTO Action_Items (update_id, description, status, client_input_required) VALUES (:uid, :desc, 'Pending', :client)"), {
@@ -174,7 +167,6 @@ elif option == "View Reports":
     with st.form("report_form"):
         report_type = st.selectbox("Report Type", ["Weekly Summary", "Project History"])
         week_ending_date = st.date_input("Select Week Ending Date")
-        # Fetch projects for dropdown
         projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
         project_name = st.selectbox("Select Project (Optional)", ["All"] + list(project_dict.keys()))
@@ -206,9 +198,9 @@ elif option == "View Reports":
             if data:
                 project_data = {}
                 for row in data:
-                    project_key = row[0]  # project_name
-                    if project_key not in project_data:
-                        project_data[project_key] = {
+                    pname = row[0]
+                    if pname not in project_data:
+                        project_data[pname] = {
                             'client_business_unit': row[1],
                             'project_manager': row[2],
                             'start_date': row[3],
@@ -223,57 +215,22 @@ elif option == "View Reports":
                             'action_items': []
                         }
                     if row[10]:
-                        project_data[project_key]['rag_status'].append({
+                        project_data[pname]['rag_status'].append({
                             'area': row[10], 'status': row[11], 'comment': row[12]
                         })
                     if row[13]:
-                        project_data[project_key]['risks_issues'].append({
+                        project_data[pname]['risks_issues'].append({
                             'type': row[13], 'description': row[14], 'owner': row[15], 'mitigation_eta': row[16]
                         })
                     if row[17]:
-                        project_data[project_key]['action_items'].append({
+                        project_data[pname]['action_items'].append({
                             'description': row[17], 'status': row[18], 'client_input_required': row[19]
                         })
-
-
-                # html = "<h2 style='text-align:center;'>Weekly Report</h2>"
-                # html += f"<p style='text-align:center;'>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p><hr>"
-
-                # for idx, (pname, details) in enumerate(project_data.items()):
-                #     html += f"""
-                #     <div style="{'page-break-before: always;' if idx != 0 else ''} font-family: Arial, sans-serif; padding: 20px;">
-                #         <h2 style="color:#003366;">{pname}</h2>
-                #         <p><strong>Client/BU:</strong> {details['client_business_unit']}<br>
-                #         <strong>Project Manager:</strong> {details['project_manager']}<br>
-                #         <strong>Duration:</strong> {details['start_date']} to {details['end_date']}<br>
-                #         <strong>Phase:</strong> {details['current_phase']}<br>
-                #         <strong>Status:</strong> <span style="color:{'green' if details['status_indicator']=='On Track' else 'red'}">{details['status_indicator']}</span></p>
-
-                #         <h4 style="color:#004080;">Accomplishments</h4>
-                #         <ul>{"".join([f"<li>{line}</li>" for line in details['accomplishments'].splitlines() if line])}</ul>
-
-                #         <h4 style="color:#004080;">Decisions Needed</h4>
-                #         <ul>{"".join([f"<li>{line}</li>" for line in details['decisions_needed'].splitlines() if line])}</ul>
-
-                #         <h4 style="color:#004080;">Milestones</h4>
-                #         <p>{details['milestones'] or "None"}</p>
-
-                #         <h4 style="color:#004080;">RAG Status</h4>
-                #         <ul>{"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}</ul>
-
-                #         <h4 style="color:#004080;">Risks & Issues</h4>
-                #         <ul>{"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}</ul>
-
-                #         <h4 style="color:#004080;">Action Items</h4>
-                #         <ul>{"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}</ul>
-                #     </div>
-                #     """
 
                 html = f"""
                 <h2 style='text-align:center; margin-bottom: 5px;'>Weekly Report</h2>
                 <p style='text-align:center; margin-bottom: 20px;'>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p>
                 """
-                
                 for idx, (pname, details) in enumerate(project_data.items()):
                     html += f"""
                     <div style="{'page-break-before: always;' if idx > 0 else ''} font-family: Arial, sans-serif; padding: 10px 20px;">
@@ -283,30 +240,38 @@ elif option == "View Reports":
                         <p style="margin: 2px 0;"><strong>Duration:</strong> {details['start_date']} to {details['end_date']}</p>
                         <p style="margin: 5px 0 10px 0;"><strong>Phase:</strong> {details['current_phase']} |
                            <strong>Status:</strong> <span style="color:{'green' if details['status_indicator']=='On Track' else 'red'}">{details['status_indicator']}</span></p>
-                
-                        <h4 style="color:#004080; margin-bottom: 4px;">Accomplishments</h4>
-                        <ul style="margin-top: 0;">{"".join([f"<li>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()])}</ul>
-                
-                        <h4 style="color:#004080; margin-bottom: 4px;">Decisions Needed</h4>
-                        <ul style="margin-top: 0;">{"".join([f"<li>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()])}</ul>
-                
-                        <h4 style="color:#004080; margin-bottom: 4px;">Milestones</h4>
-                        <p style="margin-top: 0;">{details['milestones'] or "None"}</p>
-                
-                        <h4 style="color:#004080; margin-bottom: 4px;">RAG Status</h4>
-                        <ul style="margin-top: 0;">{"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}</ul>
-                
-                        <h4 style="color:#004080; margin-bottom: 4px;">Risks & Issues</h4>
-                        <ul style="margin-top: 0;">{"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}</ul>
-                
-                        <h4 style="color:#004080; margin-bottom: 4px;">Action Items</h4>
-                        <ul style="margin-top: 0;">{"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}</ul>
+
+                        <h4 style="color:#004080;">Accomplishments</h4>
+                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
+                            {"".join([f"<li>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()])}
+                        </ul>
+
+                        <h4 style="color:#004080;">Decisions Needed</h4>
+                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
+                            {"".join([f"<li>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()])}
+                        </ul>
+
+                        <h4 style="color:#004080;">Milestones</h4>
+                        <p style="margin: 0;">{details['milestones'] or "None"}</p>
+
+                        <h4 style="color:#004080;">RAG Status</h4>
+                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
+                            {"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}
+                        </ul>
+
+                        <h4 style="color:#004080;">Risks & Issues</h4>
+                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
+                            {"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}
+                        </ul>
+
+                        <h4 style="color:#004080;">Action Items</h4>
+                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
+                            {"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}
+                        </ul>
                     </div>
                     """
-                
 
-
-                # 🖥️ Display Preview (Streamlit-native)
+                # 🖥️ Streamlit Preview
                 st.markdown("## 📝 Report Preview")
                 for pname, details in project_data.items():
                     with st.container():
@@ -321,10 +286,10 @@ elif option == "View Reports":
                             st.markdown(f"**End Date**: {details['end_date']}")
                             st.markdown(f"**Status**: {details['status_indicator']}")
                         st.subheader("Accomplishments")
-                        for line in details['accomplishments'].splitlines():
+                        for line in [l.strip() for l in details['accomplishments'].splitlines() if l.strip()]:
                             st.markdown(f"- {line}")
                         st.subheader("Decisions Needed")
-                        for line in details['decisions_needed'].splitlines():
+                        for line in [l.strip() for l in details['decisions_needed'].splitlines() if l.strip()]:
                             st.markdown(f"- {line}")
                         st.subheader("Milestones")
                         st.markdown(details['milestones'] or "- None")
@@ -349,16 +314,26 @@ elif option == "View Reports":
                             st.markdown("- No action items")
                         st.markdown("---")
 
-                # 📄 Generate PDF & Download Button
-                pdf = convert_html_to_pdf(html)
-                if pdf:
-                    st.download_button("📄 Download PDF Report", data=pdf, file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf", mime="application/pdf")
+                from xhtml2pdf import pisa
+                import io
+
+                def convert_html_to_pdf(html_content):
+                    result = io.BytesIO()
+                    pdf = pisa.pisaDocument(io.StringIO(html_content), dest=result)
+                    if not pdf.err:
+                        return result.getvalue()
+                    return None
+
+                pdf_data = convert_html_to_pdf(html)
+                if pdf_data:
+                    st.download_button("📄 Download PDF Report", data=pdf_data, file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf", mime="application/pdf")
                 else:
                     st.error("Failed to generate PDF.")
             else:
                 st.warning("No data found for the selected week/project.")
         except Exception as e:
             st.error(f"Error generating report: {str(e)}")
+
 
 
 # Close database connection
