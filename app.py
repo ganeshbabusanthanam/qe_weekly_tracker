@@ -170,22 +170,26 @@ elif option == "View Reports":
         projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
         project_name = st.selectbox("Select Project (Optional)", ["All"] + list(project_dict.keys()))
+        col1, col2 = st.columns([1, 1])
+    with col1:
         generate_report = st.form_submit_button("Generate Report")
+    with col2:
+        download_report = st.form_submit_button("Download Report")
 
-    if generate_report:
+    if generate_report or download_report:
         base_query = """
-            SELECT p.project_name, p.client_business_unit, p.project_manager, p.start_date, p.end_date, p.current_phase,
-                   w.accomplishments, w.decisions_needed, w.milestones, w.status_indicator,
-                   r.area, r.status, r.comment,
-                   ri.type, ri.description, ri.owner, ri.mitigation_eta,
-                   a.description AS action_description, a.status AS action_status, a.client_input_required
-            FROM Weekly_Updates w
-            JOIN Projects p ON w.project_id = p.project_id
-            LEFT JOIN RAG_Status r ON w.update_id = r.update_id
-            LEFT JOIN Risks_Issues ri ON w.update_id = ri.update_id
-            LEFT JOIN Action_Items a ON w.update_id = a.update_id
-            WHERE CAST(w.week_ending_date AS DATE) = :week
-        """
+                    SELECT p.project_name, p.client_business_unit, p.project_manager, p.start_date, p.end_date, p.current_phase,
+                           w.accomplishments, w.decisions_needed, w.milestones, w.status_indicator,
+                           r.area, r.status, r.comment,
+                           ri.type, ri.description, ri.owner, ri.mitigation_eta,
+                           a.description AS action_description, a.status AS action_status, a.client_input_required
+                    FROM Weekly_Updates w
+                    JOIN Projects p ON w.project_id = p.project_id
+                    LEFT JOIN RAG_Status r ON w.update_id = r.update_id
+                    LEFT JOIN Risks_Issues ri ON w.update_id = ri.update_id
+                    LEFT JOIN Action_Items a ON w.update_id = a.update_id
+                    WHERE CAST(w.week_ending_date AS DATE) = :week
+                """
         params = {'week': str(week_ending_date)}
         if project_name != "All":
             base_query += " AND p.project_name = :project_name"
@@ -242,15 +246,13 @@ elif option == "View Reports":
                            <strong>Status:</strong> <span style="color:{'green' if details['status_indicator']=='On Track' else 'red'}">{details['status_indicator']}</span></p>
 
                         <h4 style="color:#004080;">Accomplishments</h4>
-
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li style='margin: 2px 0;'>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()])}
+                            {"".join([f"<li>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()])}
                         </ul>
-
 
                         <h4 style="color:#004080;">Decisions Needed</h4>
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li style='margin: 2px 0;'>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()])}
+                            {"".join([f"<li>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()])}
                         </ul>
 
                         <h4 style="color:#004080;">Milestones</h4>
@@ -258,25 +260,65 @@ elif option == "View Reports":
 
                         <h4 style="color:#004080;">RAG Status</h4>
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li style='margin: 2px 0;'><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}
+                            {"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}
                         </ul>
-
 
                         <h4 style="color:#004080;">Risks & Issues</h4>
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li style='margin: 2px 0;'><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}
+                            {"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}
                         </ul>
-
 
                         <h4 style="color:#004080;">Action Items</h4>
                         <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li style='margin: 2px 0;'>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}
+                            {"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}
                         </ul>
-
                     </div>
                     """
 
                 # 🖥️ Streamlit Preview
+                if generate_report:
+                    st.markdown("## 📝 Report Preview")
+                    for pname, details in project_data.items():
+                        with st.container():
+                            st.markdown(f"### {pname}")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown(f"**Client/BU**: {details['client_business_unit']}")
+                                st.markdown(f"**Project Manager**: {details['project_manager']}")
+                                st.markdown(f"**Phase**: {details['current_phase']}")
+                            with col2:
+                                st.markdown(f"**Start Date**: {details['start_date']}")
+                                st.markdown(f"**End Date**: {details['end_date']}")
+                                st.markdown(f"**Status**: {details['status_indicator']}")
+                            st.subheader("Accomplishments")
+                            for line in [l.strip() for l in details['accomplishments'].splitlines() if l.strip()]:
+                                st.markdown(f"- {line}")
+                            st.subheader("Decisions Needed")
+                            for line in [l.strip() for l in details['decisions_needed'].splitlines() if l.strip()]:
+                                st.markdown(f"- {line}")
+                            st.subheader("Milestones")
+                            st.markdown(details['milestones'] or "- None")
+                            st.subheader("RAG Status")
+                            if details['rag_status']:
+                                for r in details['rag_status']:
+                                    st.markdown(f"- **{r['area']}**: {r['status']} - {r['comment'] or 'No comment'}")
+                            else:
+                                st.markdown("- No RAG status available")
+                            st.subheader("Risks & Issues")
+                            if details['risks_issues']:
+                                for ri in details['risks_issues']:
+                                    st.markdown(f"- **{ri['type']}**: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})")
+                            else:
+                                st.markdown("- No risks or issues")
+                            st.subheader("Action Items")
+                            if details['action_items']:
+                                for a in details['action_items']:
+                                    client_input = "Yes" if a['client_input_required'] else "No"
+                                    st.markdown(f"- {a['description']} - {a['status']} (Client Input: {client_input})")
+                            else:
+                                st.markdown("- No action items")
+                            st.markdown("---")
+
                 st.markdown("## 📝 Report Preview")
                 for pname, details in project_data.items():
                     with st.container():
