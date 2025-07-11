@@ -239,19 +239,19 @@ elif option == "View Reports":
                     <style>
                         body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; margin: 0.5in; line-height: 1.2; }
                         h1 { font-size: 18pt; text-align: center; color: #003366; margin: 10px 0; }
-                        h2 { font-size: 14pt; color: #003366; margin: 10px 0; }
-                        h3 { font-size: 12pt; color: #004080; margin: 8px 0; }
-                        p, ul { margin: 5px 0; }
+                        h2 { font-size: 14pt; color: #003366; margin: 8px 0; }
+                        h3 { font-size: 12pt; color: #004080; margin: 6px 0; }
+                        p, ul { margin: 4px 0; }
                         ul { padding-left: 20px; }
-                        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-                        th, td { padding: 5px; text-align: left; font-size: 12pt; }
+                        table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+                        th, td { padding: 4px; text-align: left; font-size: 12pt; }
                         .status-green { color: green; }
                         .status-red { color: red; }
                         .rag-green { color: green; }
                         .rag-orange { color: orange; }
                         .rag-red { color: red; }
-                        hr { margin: 10px 0; border: 0.5px solid #ccc; }
-                        .project-container { margin-bottom: 20px; }
+                        hr { margin: 8px 0; border: 0.5px solid #ccc; }
+                        .project-container { margin-bottom: 16px; }
                     </style>
                 </head>
                 <body>
@@ -273,8 +273,9 @@ elif option == "View Reports":
                         for action in project['action_items']
                     ) or "<li>No action items</li>"
 
+                    page_break = "page-break-before: always;" if idx != 0 else ""
                     html += f"""
-                    <div class="project-container" style="{'page-break-before: always;' if idx != 0 else ''}">
+                    <div class="project-container" style="{page_break}">
                         <h2>{pname}</h2>
                         <table>
                             <tr><th>Client/BU</th><td>{project['client_business_unit']}</td></tr>
@@ -406,11 +407,11 @@ elif option == "View Reports":
                 """
 
                 # Display Preview (Streamlit-native)
-                st.markdown(f"## Weekly Report for {week_ending_date.strftime('%Y-%m-%d')}", unsafe_allow_html=True)
-                st.markdown("---")
+                st.markdown(f"<h2 style='text-align: center; color: #003366;'>Weekly Report for {week_ending_date.strftime('%Y-%m-%d')}</h2>", unsafe_allow_html=True)
+                st.markdown("<hr style='margin: 8px 0;'>", unsafe_allow_html=True)
                 for project_name, project in project_data.items():
                     with st.container():
-                        st.markdown(f"### {project_name}", unsafe_allow_html=True)
+                        st.markdown(f"<h3 style='color: #003366;'>{project_name}</h3>", unsafe_allow_html=True)
                         col1, col2 = st.columns([3, 2])
                         with col1:
                             st.markdown(f"<strong>Client/BU:</strong> {project['client_business_unit']}", unsafe_allow_html=True)
@@ -421,7 +422,7 @@ elif option == "View Reports":
                             status_color = "green" if project['status_indicator'] == "On Track" else "red"
                             st.markdown(f"<strong>Status:</strong> <span style='color:{status_color};'>{project['status_indicator']}</span>", unsafe_allow_html=True)
                         
-                        st.markdown("<h4 style='color:#004080;'>Accomplishments</h4>", unsafe_allow_html=True)
+                        st.markdown("<h4 style='color: #004080; margin: 6px 0;'>Accomplishments</h4>", unsafe_allow_html=True)
                         accomplishments = project['accomplishments'].splitlines() if project['accomplishments'] else []
                         if accomplishments:
                             for line in accomplishments:
@@ -430,7 +431,7 @@ elif option == "View Reports":
                         else:
                             st.markdown("- None", unsafe_allow_html=True)
                         
-                        st.markdown("<h4 style='color:#004080;'>Decisions Needed</h4>", unsafe_allow_html=True)
+                        st.markdown("<h4 style='color: #004080; margin: 6px 0;'>Decisions Needed</h4>", unsafe_allow_html=True)
                         decisions = project['decisions_needed'].splitlines() if project['decisions_needed'] else []
                         if decisions:
                             for line in decisions:
@@ -439,7 +440,7 @@ elif option == "View Reports":
                         else:
                             st.markdown("- None", unsafe_allow_html=True)
                         
-                        st.markdown("<h4 style='color:#004080;'>Milestones</h4>", unsafe_allow_html=True)
+                        st.markdown("<h4 style='color: #004080; margin: 6px 0;'>Milestones</h4>", unsafe_allow_html=True)
                         st.markdown(f"- {project['milestones']}" if project['milestones'] else "- None", unsafe_allow_html=True)
                         
                         with st.expander("RAG Status"):
@@ -465,7 +466,7 @@ elif option == "View Reports":
                             else:
                                 st.markdown("- No action items")
                         
-                        st.markdown("---")
+                        st.markdown("<hr style='margin: 8px 0;'>", unsafe_allow_html=True)
 
                 # Generate PDF & Download Button
                 try:
