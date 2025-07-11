@@ -8,7 +8,6 @@ from sqlalchemy import create_engine, text
 from xhtml2pdf import pisa
 import io
 
-
 # Azure SQL Database connection
 def init_db():
     try:
@@ -158,10 +157,6 @@ elif option == "Submit Weekly Update":
 
 # View Reports
 elif option == "View Reports":
-    import pdfkit
-    import base64
-    import tempfile
-
     st.header("Project Report Generator")
 
     with st.form("report_form"):
@@ -171,10 +166,10 @@ elif option == "View Reports":
         project_dict = {row.project_name: row.project_id for row in projects}
         project_name = st.selectbox("Select Project (Optional)", ["All"] + list(project_dict.keys()))
         col1, col2 = st.columns([1, 1])
-    with col1:
-        generate_report = st.form_submit_button("Generate Report")
-    with col2:
-        download_report = st.form_submit_button("Download Report")
+        with col1:
+            generate_report = st.form_submit_button("Generate Report")
+        with col2:
+            download_report = st.form_submit_button("Download PDF Report")
 
     if generate_report or download_report:
         base_query = """
@@ -231,157 +226,138 @@ elif option == "View Reports":
                             'description': row[17], 'status': row[18], 'client_input_required': row[19]
                         })
 
+                # Improved HTML for PDF with proper spacing and formatting
                 html = f"""
-                <h2 style='text-align:center; margin-bottom: 5px;'>Weekly Report</h2>
-                <p style='text-align:center; margin-bottom: 20px;'>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p>
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.5; }}
+                        h2 {{ color: #003366; margin-bottom: 10px; }}
+                        h4 {{ color: #004080; margin-top: 15px; margin-bottom: 8px; }}
+                        p {{ margin: 5px 0; }}
+                        ul {{ margin: 5px 0; padding-left: 25px; }}
+                        li {{ margin-bottom: 5px; }}
+                        .project-container {{ margin-bottom: 30px; page-break-inside: avoid; }}
+                        .header {{ text-align: center; margin-bottom: 20px; }}
+                        .status-ontrack {{ color: green; }}
+                        .status-delayed {{ color: red; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h2>Weekly Report</h2>
+                        <p>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p>
+                    </div>
                 """
                 for idx, (pname, details) in enumerate(project_data.items()):
                     html += f"""
-                    <div style="{'page-break-before: always;' if idx > 0 else ''} font-family: Arial, sans-serif; padding: 10px 20px;">
-                        <h2 style="color:#003366; margin-bottom: 5px;">{pname}</h2>
-                        <p style="margin: 2px 0;"><strong>Client/BU:</strong> {details['client_business_unit']}</p>
-                        <p style="margin: 2px 0;"><strong>Project Manager:</strong> {details['project_manager']}</p>
-                        <p style="margin: 2px 0;"><strong>Duration:</strong> {details['start_date']} to {details['end_date']}</p>
-                        <p style="margin: 5px 0 10px 0;"><strong>Phase:</strong> {details['current_phase']} |
-                           <strong>Status:</strong> <span style="color:{'green' if details['status_indicator']=='On Track' else 'red'}">{details['status_indicator']}</span></p>
+                    <div class="project-container" style="{'page-break-before: always;' if idx > 0 else ''}">
+                        <h2>{pname}</h2>
+                        <p><strong>Client/BU:</strong> {details['client_business_unit']}</p>
+                        <p><strong>Project Manager:</strong> {details['project_manager']}</p>
+                        <p><strong>Duration:</strong> {details['start_date']} to {details['end_date']}</p>
+                        <p><strong>Phase:</strong> {details['current_phase']} | 
+                           <strong>Status:</strong> <span class="status-{'ontrack' if details['status_indicator']=='On Track' else 'delayed'}">{details['status_indicator']}</span></p>
 
-                        <h4 style="color:#004080;">Accomplishments</h4>
-                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()])}
+                        <h4>Accomplishments</h4>
+                        <ul>
+                            {"".join([f"<li>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()]) or "<li>No accomplishments reported</li>"}
                         </ul>
 
-                        <h4 style="color:#004080;">Decisions Needed</h4>
-                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()])}
+                        <h4>Decisions Needed</h4>
+                        <ul>
+                            {"".join([f"<li>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()]) or "<li>No decisions needed</li>"}
                         </ul>
 
-                        <h4 style="color:#004080;">Milestones</h4>
-                        <p style="margin: 0;">{details['milestones'] or "None"}</p>
+                        <h4>Milestones</h4>
+                        <p>{details['milestones'] or "None"}</p>
 
-                        <h4 style="color:#004080;">RAG Status</h4>
-                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li><b>{r['area']}</b>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}
+                        <h4>RAG Status</h4>
+                        <ul>
+                            {"".join([f"<li><strong>{r['area']}</strong>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}
                         </ul>
 
-                        <h4 style="color:#004080;">Risks & Issues</h4>
-                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
-                            {"".join([f"<li><b>{ri['type']}</b>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}
+                        <h4>Risks & Issues</h4>
+                        <ul>
+                            {"".join([f"<li><strong>{ri['type']}</strong>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}
                         </ul>
 
-                        <h4 style="color:#004080;">Action Items</h4>
-                        <ul style="margin: 0; padding-left: 20px; line-height: 1.4;">
+                        <h4>Action Items</h4>
+                        <ul>
                             {"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}
                         </ul>
                     </div>
                     """
+                html += """
+                </body>
+                </html>
+                """
 
-                # 🖥️ Streamlit Preview
-                if generate_report:
-                    st.markdown("## 📝 Report Preview")
-                    for pname, details in project_data.items():
-                        with st.container():
-                            st.markdown(f"### {pname}")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(f"**Client/BU**: {details['client_business_unit']}")
-                                st.markdown(f"**Project Manager**: {details['project_manager']}")
-                                st.markdown(f"**Phase**: {details['current_phase']}")
-                            with col2:
-                                st.markdown(f"**Start Date**: {details['start_date']}")
-                                st.markdown(f"**End Date**: {details['end_date']}")
-                                st.markdown(f"**Status**: {details['status_indicator']}")
-                            st.subheader("Accomplishments")
-                            for line in [l.strip() for l in details['accomplishments'].splitlines() if l.strip()]:
-                                st.markdown(f"- {line}")
-                            st.subheader("Decisions Needed")
-                            for line in [l.strip() for l in details['decisions_needed'].splitlines() if l.strip()]:
-                                st.markdown(f"- {line}")
-                            st.subheader("Milestones")
-                            st.markdown(details['milestones'] or "- None")
-                            st.subheader("RAG Status")
-                            if details['rag_status']:
-                                for r in details['rag_status']:
-                                    st.markdown(f"- **{r['area']}**: {r['status']} - {r['comment'] or 'No comment'}")
-                            else:
-                                st.markdown("- No RAG status available")
-                            st.subheader("Risks & Issues")
-                            if details['risks_issues']:
-                                for ri in details['risks_issues']:
-                                    st.markdown(f"- **{ri['type']}**: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})")
-                            else:
-                                st.markdown("- No risks or issues")
-                            st.subheader("Action Items")
-                            if details['action_items']:
-                                for a in details['action_items']:
-                                    client_input = "Yes" if a['client_input_required'] else "No"
-                                    st.markdown(f"- {a['description']} - {a['status']} (Client Input: {client_input})")
-                            else:
-                                st.markdown("- No action items")
-                            st.markdown("---")
-
-                st.markdown("## 📝 Report Preview")
-                for pname, details in project_data.items():
-                    with st.container():
-                        st.markdown(f"### {pname}")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**Client/BU**: {details['client_business_unit']}")
-                            st.markdown(f"**Project Manager**: {details['project_manager']}")
-                            st.markdown(f"**Phase**: {details['current_phase']}")
-                        with col2:
-                            st.markdown(f"**Start Date**: {details['start_date']}")
-                            st.markdown(f"**End Date**: {details['end_date']}")
-                            st.markdown(f"**Status**: {details['status_indicator']}")
-                        st.subheader("Accomplishments")
-                        for line in [l.strip() for l in details['accomplishments'].splitlines() if l.strip()]:
-                            st.markdown(f"- {line}")
-                        st.subheader("Decisions Needed")
-                        for line in [l.strip() for l in details['decisions_needed'].splitlines() if l.strip()]:
-                            st.markdown(f"- {line}")
-                        st.subheader("Milestones")
-                        st.markdown(details['milestones'] or "- None")
-                        st.subheader("RAG Status")
-                        if details['rag_status']:
-                            for r in details['rag_status']:
-                                st.markdown(f"- **{r['area']}**: {r['status']} - {r['comment'] or 'No comment'}")
-                        else:
-                            st.markdown("- No RAG status available")
-                        st.subheader("Risks & Issues")
-                        if details['risks_issues']:
-                            for ri in details['risks_issues']:
-                                st.markdown(f"- **{ri['type']}**: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})")
-                        else:
-                            st.markdown("- No risks or issues")
-                        st.subheader("Action Items")
-                        if details['action_items']:
-                            for a in details['action_items']:
-                                client_input = "Yes" if a['client_input_required'] else "No"
-                                st.markdown(f"- {a['description']} - {a['status']} (Client Input: {client_input})")
-                        else:
-                            st.markdown("- No action items")
-                        st.markdown("---")
-
-                from xhtml2pdf import pisa
-                import io
-
-                def convert_html_to_pdf(html_content):
-                    result = io.BytesIO()
-                    pdf = pisa.pisaDocument(io.StringIO(html_content), dest=result)
-                    if not pdf.err:
-                        return result.getvalue()
-                    return None
-
+                # Generate PDF
                 pdf_data = convert_html_to_pdf(html)
-                if pdf_data:
-                    st.download_button("📄 Download PDF Report", data=pdf_data, file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf", mime="application/pdf")
-                else:
-                    st.error("Failed to generate PDF.")
+
+                # Streamlit Preview and Download
+                if generate_report or download_report:
+                    if pdf_data:
+                        # Display preview
+                        if generate_report:
+                            st.markdown("## 📝 Report Preview")
+                            for pname, details in project_data.items():
+                                with st.container():
+                                    st.markdown(f"### {pname}")
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown(f"**Client/BU**: {details['client_business_unit']}")
+                                        st.markdown(f"**Project Manager**: {details['project_manager']}")
+                                        st.markdown(f"**Phase**: {details['current_phase']}")
+                                    with col2:
+                                        st.markdown(f"**Start Date**: {details['start_date']}")
+                                        st.markdown(f"**End Date**: {details['end_date']}")
+                                        st.markdown(f"**Status**: {details['status_indicator']}")
+                                    st.subheader("Accomplishments")
+                                    for line in [l.strip() for l in details['accomplishments'].splitlines() if l.strip()]:
+                                        st.markdown(f"- {line}")
+                                    st.subheader("Decisions Needed")
+                                    for line in [l.strip() for l in details['decisions_needed'].splitlines() if l.strip()]:
+                                        st.markdown(f"- {line}")
+                                    st.subheader("Milestones")
+                                    st.markdown(details['milestones'] or "- None")
+                                    st.subheader("RAG Status")
+                                    if details['rag_status']:
+                                        for r in details['rag_status']:
+                                            st.markdown(f"- **{r['area']}**: {r['status']} - {r['comment'] or 'No comment'}")
+                                    else:
+                                        st.markdown("- No RAG status available")
+                                    st.subheader("Risks & Issues")
+                                    if details['risks_issues']:
+                                        for ri in details['risks_issues']:
+                                            st.markdown(f"- **{ri['type']}**: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})")
+                                    else:
+                                        st.markdown("- No risks or issues")
+                                    st.subheader("Action Items")
+                                    if details['action_items']:
+                                        for a in details['action_items']:
+                                            client_input = "Yes" if a['client_input_required'] else "No"
+                                            st.markdown(f"- {a['description']} - {a['status']} (Client Input: {client_input})")
+                                    else:
+                                        st.markdown("- No action items")
+                                    st.markdown("---")
+
+                        # Download PDF
+                        if download_report:
+                            st.download_button(
+                                label="📄 Download PDF Report",
+                                data=pdf_data,
+                                file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf",
+                                mime="application/pdf"
+                            )
+                    else:
+                        st.error("Failed to generate PDF.")
             else:
                 st.warning("No data found for the selected week/project.")
         except Exception as e:
             st.error(f"Error generating report: {str(e)}")
-
-
 
 # Close database connection
 conn.close()
