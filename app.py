@@ -15,7 +15,7 @@ def init_db():
         database = st.secrets["db_name"]
         username = st.secrets["db_user"]
         password = st.secrets["db_password"]
-        connection_url = f"mssql+pytds://{username}:{password}@{server}:1433/{database}"
+        connection_url = f"mssql+pymssql://{username}:{password}@{server}:1433/{database}"
         engine = create_engine(connection_url)
         conn = engine.connect()
         return conn
