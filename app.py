@@ -1,11 +1,12 @@
 import streamlit as st
-import pyodbc
 import pandas as pd
 from datetime import datetime
 import json
 from dotenv import load_dotenv
 import os
 from sqlalchemy import create_engine, text
+from xhtml2pdf import pisa
+import io
 
 
 # Azure SQL Database connection
@@ -23,6 +24,12 @@ def init_db():
         st.error(f"DB Connection Failed: {e}")
         raise
 
+def convert_html_to_pdf(html_content):
+    result = io.BytesIO()
+    pdf = pisa.pisaDocument(io.StringIO(html_content), dest=result)
+    if not pdf.err:
+        return result.getvalue()
+    return None
 
 # Initialize database connection
 conn = init_db()
@@ -307,13 +314,11 @@ elif option == "View Reports":
                         st.markdown("---")
 
                 # 📄 Generate PDF & Download Button
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmpfile:
-                    pdfkit.from_string(html, tmpfile.name)
-                    with open(tmpfile.name, "rb") as f:
-                        base64_pdf = base64.b64encode(f.read()).decode("utf-8")
-                        href = f'<a href="data:application/pdf;base64,{base64_pdf}" download="Weekly_Report_{week_ending_date.strftime("%Y%m%d")}.pdf">📄 Download PDF Report</a>'
-                        st.markdown(href, unsafe_allow_html=True)
-
+                pdf = convert_html_to_pdf(html)
+                if pdf:
+                    st.download_button("📄 Download PDF Report", data=pdf, file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf", mime="application/pdf")
+                else:
+                    st.error("Failed to generate PDF.")
             else:
                 st.warning("No data found for the selected week/project.")
         except Exception as e:
