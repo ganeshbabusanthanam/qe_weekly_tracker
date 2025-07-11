@@ -164,7 +164,6 @@ elif option == "Submit Weekly Update":
                     raise
 
 # View Reports
-# View Reports
 elif option == "View Reports":
     import pdfkit
     import base64
