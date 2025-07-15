@@ -260,7 +260,7 @@ else:
                         st.error(f"Failed to submit weekly update: {e}")
                         raise
 
-    # View Reports
+# View Reports
     elif option == "View Reports":
         st.header("Project Report Generator")
 
@@ -315,8 +315,8 @@ else:
                                 'milestones': row[8],
                                 'status_indicator': row[9],
                                 'rag_status': [],
-                                'risks_issues': set(),  # Use set to avoid duplicates
-                                'action_items': set()   # Use set to avoid duplicates
+                                'risks_issues': set(),
+                                'action_items': set()
                             }
                         if row[10]:
                             project_data[pname]['rag_status'].append({
@@ -457,23 +457,35 @@ else:
                                     else:
                                         st.markdown("- No action items")
                                     st.markdown("---")
-
-                        # Always provide download option
-                        st.download_button(
-                            label="📄 Download PDF Report",
-                            data=pdf_data,
-                            file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf",
-                            mime="application/pdf",
-                            key="auto_download" if download_report else "preview_download",
-                            on_click=lambda: None
-                        )
+                            # Show download button for preview
+                            st.download_button(
+                                label="📄 Download PDF Report",
+                                data=pdf_data,
+                                file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf",
+                                mime="application/pdf",
+                                key="preview_download"
+                            )
+                        elif download_report:
+                            # Trigger immediate download
+                            st.download_button(
+                                label="📄 Downloading PDF Report...",
+                                data=pdf_data,
+                                file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf",
+                                mime="application/pdf",
+                                key="direct_download",
+                                help="Click to download the PDF report",
+                                # Use JavaScript to trigger immediate download
+                                on_click=lambda: st.markdown(
+                                    f'<script>window.location.href = "data:application/pdf;base64,{st.base64.b64encode(pdf_data).decode()}";</script>',
+                                    unsafe_allow_html=True
+                                )
+                            )
                     else:
                         st.error("Failed to generate PDF.")
                 else:
                     st.warning("No data found for the selected week/project.")
             except Exception as e:
                 st.error(f"Error generating report: {str(e)}")
-
     # Close database connection
     conn.close()
     engine.dispose()
