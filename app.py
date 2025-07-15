@@ -93,11 +93,14 @@ if not st.session_state.authenticated:
         with st.form("add_user_form"):
             new_username = st.text_input("New Username")
             new_password = st.text_input("New Password", type="password")
+            auth_code = st.text_input("Authentication Code", type="password")
             add_user_button = st.form_submit_button("Add User")
             
             if add_user_button:
-                if not new_username or not new_password:
-                    st.error("Please enter both username and password")
+                if not new_username or not new_password or not auth_code:
+                    st.error("Please enter all fields including the Authentication Code")
+                elif auth_code != "SECURE123":  # Hardcoded static authentication code
+                    st.error("Invalid Authentication Code")
                 else:
                     try:
                         password_hash = hash_password(new_password)
@@ -315,8 +318,8 @@ else:
                                 'milestones': row[8],
                                 'status_indicator': row[9],
                                 'rag_status': [],
-                                'risks_issues': set(),  # Use set to avoid duplicates
-                                'action_items': set()   # Use set to avoid duplicates
+                                'risks_issues': set(),
+                                'action_items': set()
                             }
                         if row[10]:
                             project_data[pname]['rag_status'].append({
