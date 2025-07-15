@@ -9,125 +9,178 @@ from xhtml2pdf import pisa
 import io
 import bcrypt
 
-# Custom CSS for UI enhancements
+# Custom CSS for enhanced UI
 st.markdown("""
     <style>
         /* General styling */
         body {
-            font-family: 'Roboto', sans-serif;
-            background-color: #f8f9fa;
+            font-family: 'Open Sans', sans-serif;
+            background: linear-gradient(135deg, #e0eafc, #cfdef3);
+            margin: 0;
+            padding: 0;
         }
         .stApp {
-            background-color: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(5px);
         }
         .stHeader {
-            color: #0058a3;
-            font-size: 1.8em;
-            font-weight: bold;
+            color: #1e3a8a;
+            font-size: 2em;
+            font-weight: 700;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
         }
         .stSubheader {
-            color: #004080;
-            font-size: 1.3em;
+            color: #2b6cb0;
+            font-size: 1.5em;
+            font-weight: 600;
         }
 
-        /* Button styling */
+        /* Button styling with animation */
         .stButton>button {
-            background-color: #0058a3;
+            background: linear-gradient(45deg, #1e40af, #3b82f6);
             color: white;
             border: none;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-weight: 500;
-            transition: background-color 0.3s, transform 0.2s;
+            border-radius: 10px;
+            padding: 12px 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
         .stButton>button:hover {
-            background-color: #003f7d;
-            transform: scale(1.05);
+            background: linear-gradient(45deg, #1e3a8a, #60a5fa);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(30, 64, 175, 0.4);
+        }
+        .stButton>button:active {
+            transform: translateY(0);
+        }
+        .stButton>button::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s ease, height 0.6s ease;
+        }
+        .stButton>button:hover::after {
+            width: 200px;
+            height: 200px;
         }
         .stButton>button:focus {
             outline: none;
-            box-shadow: 0 0 0 3px rgba(0, 88, 163, 0.3);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5);
         }
 
         /* Input and form styling */
         .stTextInput>div>input, .stDateInput>div>input, .stSelectbox>div>select, .stTextArea>div>textarea {
-            border: 2px solid #ced4da;
-            border-radius: 6px;
-            padding: 8px;
-            font-size: 1em;
-            transition: border-color 0.3s;
+            border: 2px solid #93c5fd;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 1.1em;
+            background: #f1f5f9;
+            transition: border-color 0.3s, box-shadow 0.3s;
         }
         .stTextInput>div>input:focus, .stDateInput>div>input:focus, .stSelectbox>div>select:focus, .stTextArea>div>textarea:focus {
-            border-color: #0058a3;
-            box-shadow: 0 0 5px rgba(0, 88, 163, 0.3);
+            border-color: #3b82f6;
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
         }
         .stForm {
-            padding: 15px;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            background-color: #ffffff;
+            padding: 20px;
+            border: 2px solid #e0e7ff;
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
         /* Sidebar styling */
         .sidebar .sidebar-content {
-            background-color: #e9ecef;
-            padding: 15px;
-            border-radius: 8px;
+            background: linear-gradient(135deg, #e0e7ff, #f1f5f9);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
         .sidebar .stHeader {
-            color: #003f7d;
-            font-size: 1.5em;
+            color: #1e3a8a;
+            font-size: 1.6em;
+            font-weight: 700;
         }
         .sidebar .stButton>button {
-            background-color: #dc3545;
+            background: linear-gradient(45deg, #ef4444, #f87171);
             color: white;
-            border-radius: 8px;
-            padding: 8px;
-            margin-top: 10px;
+            border-radius: 10px;
+            padding: 10px;
+            margin-top: 15px;
+            transition: all 0.3s ease;
         }
         .sidebar .stButton>button:hover {
-            background-color: #c82333;
+            background: linear-gradient(45deg, #dc2626, #f43f5e);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(239, 68, 68, 0.4);
         }
 
-        /* Feedback messages */
+        /* Feedback messages with icons */
         .stSuccess {
             background-color: #d4edda;
             color: #155724;
-            border-radius: 5px;
-            padding: 10px;
-            border-left: 4px solid #28a745;
+            border-radius: 8px;
+            padding: 12px;
+            border-left: 5px solid #28a745;
+            display: flex;
+            align-items: center;
+        }
+        .stSuccess::before {
+            content: '✅';
+            margin-right: 10px;
         }
         .stError {
             background-color: #f8d7da;
             color: #721c24;
-            border-radius: 5px;
-            padding: 10px;
-            border-left: 4px solid #dc3545;
+            border-radius: 8px;
+            padding: 12px;
+            border-left: 5px solid #dc3545;
+            display: flex;
+            align-items: center;
+        }
+        .stError::before {
+            content: '❌';
+            margin-right: 10px;
         }
         .stWarning {
             background-color: #fff3cd;
             color: #856404;
-            border-radius: 5px;
-            padding: 10px;
-            border-left: 4px solid #ffc107;
+            border-radius: 8px;
+            padding: 12px;
+            border-left: 5px solid #ffc107;
+            display: flex;
+            align-items: center;
+        }
+        .stWarning::before {
+            content: '⚠️';
+            margin-right: 10px;
         }
 
         /* Expander styling */
         .stExpander {
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            margin-bottom: 10px;
+            border: 2px solid #e0e7ff;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
         .stExpander > div > div {
-            padding: 10px;
+            padding: 15px;
         }
 
         /* Column spacing */
         .stColumns > div {
-            padding: 5px;
+            padding: 8px;
         }
     </style>
 """, unsafe_allow_html=True)
