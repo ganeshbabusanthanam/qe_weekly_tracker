@@ -6,3 +6,4 @@ pdfkit
 sqlalchemy
 pymssql
 xhtml2pdf
+bcrypt
