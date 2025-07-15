@@ -9,6 +9,129 @@ from xhtml2pdf import pisa
 import io
 import bcrypt
 
+# Custom CSS for UI enhancements
+st.markdown("""
+    <style>
+        /* General styling */
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .stApp {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .stHeader {
+            color: #0058a3;
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .stSubheader {
+            color: #004080;
+            font-size: 1.3em;
+        }
+
+        /* Button styling */
+        .stButton>button {
+            background-color: #0058a3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 500;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        .stButton>button:hover {
+            background-color: #003f7d;
+            transform: scale(1.05);
+        }
+        .stButton>button:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0, 88, 163, 0.3);
+        }
+
+        /* Input and form styling */
+        .stTextInput>div>input, .stDateInput>div>input, .stSelectbox>div>select, .stTextArea>div>textarea {
+            border: 2px solid #ced4da;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        .stTextInput>div>input:focus, .stDateInput>div>input:focus, .stSelectbox>div>select:focus, .stTextArea>div>textarea:focus {
+            border-color: #0058a3;
+            box-shadow: 0 0 5px rgba(0, 88, 163, 0.3);
+        }
+        .stForm {
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #ffffff;
+        }
+
+        /* Sidebar styling */
+        .sidebar .sidebar-content {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .sidebar .stHeader {
+            color: #003f7d;
+            font-size: 1.5em;
+        }
+        .sidebar .stButton>button {
+            background-color: #dc3545;
+            color: white;
+            border-radius: 8px;
+            padding: 8px;
+            margin-top: 10px;
+        }
+        .sidebar .stButton>button:hover {
+            background-color: #c82333;
+        }
+
+        /* Feedback messages */
+        .stSuccess {
+            background-color: #d4edda;
+            color: #155724;
+            border-radius: 5px;
+            padding: 10px;
+            border-left: 4px solid #28a745;
+        }
+        .stError {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-radius: 5px;
+            padding: 10px;
+            border-left: 4px solid #dc3545;
+        }
+        .stWarning {
+            background-color: #fff3cd;
+            color: #856404;
+            border-radius: 5px;
+            padding: 10px;
+            border-left: 4px solid #ffc107;
+        }
+
+        /* Expander styling */
+        .stExpander {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .stExpander > div > div {
+            padding: 10px;
+        }
+
+        /* Column spacing */
+        .stColumns > div {
+            padding: 5px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # Azure SQL Database connection
 def init_db():
     try:
@@ -99,7 +222,7 @@ if not st.session_state.authenticated:
             if add_user_button:
                 if not new_username or not new_password or not auth_code:
                     st.error("Please enter all fields including the Authentication Code")
-                elif auth_code != "SECURE123":  # Hardcoded static authentication code
+                elif auth_code != "SECURE123":
                     st.error("Invalid Authentication Code")
                 else:
                     try:
