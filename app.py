@@ -218,8 +218,8 @@ def init_db():
         """))
         # Create Weekly_Updates table if it doesn't exist
         conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Weekly_Updates')
-            CREATE TABLE Weekly_Updates (
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeWeekly_Updates')
+            CREATE TABLE qeWeekly_Updates (
                 update_id INT IDENTITY(1,1) PRIMARY KEY,
                 project_id INT NOT NULL,
                 week_ending_date DATE,
