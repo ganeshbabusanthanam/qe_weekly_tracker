@@ -206,8 +206,8 @@ def init_db():
         """))
         # Create Projects table if it doesn't exist
         conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Projects')
-            CREATE TABLE Projects (
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeProjects')
+            CREATE TABLE qeProjects (
                 project_id INT IDENTITY(1,1) PRIMARY KEY,
                 project_name NVARCHAR(255) NOT NULL,
                 client NVARCHAR(255),
@@ -240,7 +240,7 @@ def init_db():
                 sit_defects INT,
                 uat_defects INT,
                 reopened_defects INT,
-                FOREIGN KEY (project_id) REFERENCES Projects(project_id)
+                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id)
             )
         """))
         conn.commit()
@@ -363,7 +363,7 @@ else:
                     try:
                         conn.execute(text("SELECT 1"))
                         insert_stmt = text("""
-                            INSERT INTO Projects (project_name, client, project_spoc, technology_used, artifacts_link)
+                            INSERT INTO qeProjects (project_name, client, project_spoc, technology_used, artifacts_link)
                             OUTPUT INSERTED.project_id
                             VALUES (:name, :client, :spoc, :tech, :link)
                         """)
@@ -389,7 +389,7 @@ else:
     # Submit Weekly Update
     elif option == "Submit Weekly Update":
         st.header("Weekly QE Update")
-        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+        projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
 
         if not project_dict:
@@ -497,7 +497,7 @@ else:
                                w.tc_automated, w.effort_tc_automation,
                                w.defects_raised_internal, w.sit_defects, w.uat_defects, w.reopened_defects
                         FROM Weekly_Updates w
-                        JOIN Projects p ON w.project_id = p.project_id
+                        JOIN qeProjects p ON w.project_id = p.project_id
                         WHERE CAST(w.week_ending_date AS DATE) = :week
                     """
             params = {'week': str(week_ending_date)}
