@@ -479,7 +479,7 @@ else:
 
         with st.form("report_form"):
             week_ending_date = st.date_input("Select Week Ending Date")
-            projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+            projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
             project_dict = {row.project_name: row.project_id for row in projects}
             project_name = st.selectbox("Select Project (Optional)", ["All"] + list(project_dict.keys()))
             col1, col2 = st.columns(2)
