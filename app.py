@@ -204,6 +204,45 @@ def init_db():
                 password_hash NVARCHAR(255) NOT NULL
             )
         """))
+        # Create Projects table if it doesn't exist
+        conn.execute(text("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Projects')
+            CREATE TABLE Projects (
+                project_id INT IDENTITY(1,1) PRIMARY KEY,
+                project_name NVARCHAR(255) NOT NULL,
+                client NVARCHAR(255),
+                project_spoc NVARCHAR(255),
+                technology_used NVARCHAR(255),
+                artifacts_link NVARCHAR(MAX)
+            )
+        """))
+        # Create Weekly_Updates table if it doesn't exist
+        conn.execute(text("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Weekly_Updates')
+            CREATE TABLE Weekly_Updates (
+                update_id INT IDENTITY(1,1) PRIMARY KEY,
+                project_id INT NOT NULL,
+                week_ending_date DATE,
+                qe_overall_status NVARCHAR(10),
+                qe_progress_percentage INT,
+                current_week_progress_entry NVARCHAR(MAX),
+                next_release_date DATE,
+                qe_team_size INT,
+                qe_current_week_task NVARCHAR(MAX),
+                qe_automation_tools_used NVARCHAR(MAX),
+                tc_created INT,
+                tc_executed INT,
+                tc_passed_first_round INT,
+                effort_tc_execution FLOAT,
+                tc_automated INT,
+                effort_tc_automation FLOAT,
+                defects_raised_internal INT,
+                sit_defects INT,
+                uat_defects INT,
+                reopened_defects INT,
+                FOREIGN KEY (project_id) REFERENCES Projects(project_id)
+            )
+        """))
         conn.commit()
         return conn, engine
     except Exception as e:
@@ -247,7 +286,7 @@ conn, engine = init_db()
 
 # Login page
 if not st.session_state.authenticated:
-    st.title("Login to Project Delivery Dashboard")
+    st.title("Login to QE Weekly Status Dashboard")
     
     with st.form("login_form"):
         username = st.text_input("Username")
@@ -292,8 +331,8 @@ if not st.session_state.authenticated:
     conn.close()
     engine.dispose()
 else:
-    # Original dashboard code
-    st.title("Project Delivery Dashboard")
+    # Dashboard code
+    st.title("QE Weekly Status Dashboard")
     st.sidebar.header(f"Welcome, {st.session_state.username}")
     
     # Logout button
@@ -311,33 +350,29 @@ else:
         st.header("Add New Project")
         with st.form("project_form"):
             project_name = st.text_input("Project Name")
-            client_business_unit = st.text_input("Client / Business Unit")
-            project_manager = st.text_input("Project Manager / Delivery Lead")
-            start_date = st.date_input("Start Date")
-            end_date = st.date_input("End Date")
-            current_phase = st.selectbox("Current Phase", ["Build", "Test", "UAT", "Go-Live"])
+            client = st.text_input("Client")
+            project_spoc = st.text_input("Project SPOC")
+            technology_used = st.text_input("Technology Used")
+            artifacts_link = st.text_input("Project Artifacts Link")
             submit_project = st.form_submit_button("Submit Project")
 
             if submit_project:
-                if not all([project_name, client_business_unit, project_manager, start_date, end_date]):
+                if not all([project_name, client, project_spoc, technology_used, artifacts_link]):
                     st.error("All fields are required!")
-                elif start_date > end_date:
-                    st.error("Start Date cannot be later than End Date!")
                 else:
                     try:
                         conn.execute(text("SELECT 1"))
                         insert_stmt = text("""
-                            INSERT INTO Projects (project_name, client_business_unit, project_manager, start_date, end_date, current_phase)
+                            INSERT INTO Projects (project_name, client, project_spoc, technology_used, artifacts_link)
                             OUTPUT INSERTED.project_id
-                            VALUES (:name, :client, :manager, :start, :end, :phase)
+                            VALUES (:name, :client, :spoc, :tech, :link)
                         """)
                         result = conn.execute(insert_stmt, {
                             'name': project_name.strip(),
-                            'client': client_business_unit.strip(),
-                            'manager': project_manager.strip(),
-                            'start': str(start_date),
-                            'end': str(end_date),
-                            'phase': current_phase
+                            'client': client.strip(),
+                            'spoc': project_spoc.strip(),
+                            'tech': technology_used.strip(),
+                            'link': artifacts_link.strip()
                         })
                         row = result.fetchone()
                         if row is None:
@@ -353,7 +388,7 @@ else:
 
     # Submit Weekly Update
     elif option == "Submit Weekly Update":
-        st.header("Weekly Project Update")
+        st.header("Weekly QE Update")
         projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
 
@@ -363,76 +398,75 @@ else:
             with st.form("update_form"):
                 project_name = st.selectbox("Select Project", list(project_dict.keys()))
                 week_ending_date = st.date_input("Week Ending Date")
-                accomplishments = st.text_area("This Week’s Accomplishmentseltas (2-3 bullets)")
-                decisions_needed = st.text_area("Key Decisions Needed / Escalations (1-2 bullets)")
-                milestones = st.text_input("Key Milestones")
-                status_indicator = st.selectbox("Status Indicator", ["On Track", "Delayed"])
 
-                st.subheader("RAG Status")
-                rag_areas = ["Scope", "Timeline", "Cost", "Quality", "Resources"]
-                rag_data = {}
-                for area in rag_areas:
-                    status = st.selectbox(f"Status for {area}", ["Green", "Amber", "Red"], key=f"rag_{area}")
-                    comment = st.text_input(f"Comment for {area}", key=f"comment_{area}")
-                    rag_data[area] = {"status": status, "comment": comment}
+                st.subheader("QE Status & Progress")
+                qe_overall_status = st.selectbox("QE Overall Status", ["GREEN", "AMBER", "RED"])
+                qe_progress_percentage = st.number_input("QE Progress Percentage", min_value=0, max_value=100, step=1)
+                current_week_progress_entry = st.text_area("Current Week Entry on Overall Progress")
+                next_release_date = st.date_input("Next Release Date")
 
-                st.subheader("Risks & Issues")
-                risks = st.text_area("Top 2 Risks (Description, Owner, Mitigation)")
-                issues = st.text_area("Top 2 Issues (Description, Owner, ETA)")
+                st.subheader("QE Team & Resources")
+                qe_team_size = st.number_input("QE Team Size", min_value=0, step=1)
+                qe_current_week_task = st.text_area("QE Current Week Task")
+                qe_automation_tools_used = st.text_area("QE Automation Tools Used")
 
-                st.subheader("Action Items / Dependencies")
-                action_items = st.text_area("Pending Actions")
-                client_inputs = st.checkbox("Client Inputs / Approvals Required")
+                st.subheader("Test Case Metrics")
+                tc_created = st.number_input("#TC Created", min_value=0, step=1)
+                tc_executed = st.number_input("#TC Executed", min_value=0, step=1)
+                tc_passed_first_round = st.number_input("#TC Passed in First Round of Validation", min_value=0, step=1)
+                effort_tc_execution = st.number_input("Effort Spent on TC Execution (hours)", min_value=0.0, format="%.2f")
+                tc_automated = st.number_input("#TC Automated", min_value=0, step=1)
+                effort_tc_automation = st.number_input("Efforts Spent on TC Automation (hours)", min_value=0.0, format="%.2f")
+
+                st.subheader("Defects & Quality Metrics")
+                defects_raised_internal = st.number_input("Defects Raised (Internal)", min_value=0, step=1)
+                sit_defects = st.number_input("#SIT Defects", min_value=0, step=1)
+                uat_defects = st.number_input("#UAT Defects", min_value=0, step=1)
+                reopened_defects = st.number_input("#Reopened Defects", min_value=0, step=1)
 
                 submit_update = st.form_submit_button("Submit Update")
                 if submit_update:
                     try:
                         project_id = project_dict[project_name]
                         insert_update = text("""
-                            INSERT INTO Weekly_Updates (project_id, week_ending_date, accomplishments, decisions_needed, milestones, status_indicator)
+                            INSERT INTO Weekly_Updates (
+                                project_id, week_ending_date, qe_overall_status, qe_progress_percentage,
+                                current_week_progress_entry, next_release_date, qe_team_size,
+                                qe_current_week_task, qe_automation_tools_used, tc_created,
+                                tc_executed, tc_passed_first_round, effort_tc_execution,
+                                tc_automated, effort_tc_automation, defects_raised_internal,
+                                sit_defects, uat_defects, reopened_defects
+                            )
                             OUTPUT INSERTED.update_id
-                            VALUES (:pid, :week, :acc, :dec, :mile, :status)
+                            VALUES (
+                                :pid, :week, :status, :progress, :entry, :release, :size,
+                                :task, :tools, :tc_created, :tc_executed, :tc_passed,
+                                :effort_exec, :tc_auto, :effort_auto, :def_internal,
+                                :sit, :uat, :reopened
+                            )
                         """)
                         result = conn.execute(insert_update, {
                             'pid': project_id,
                             'week': str(week_ending_date),
-                            'acc': accomplishments,
-                            'dec': decisions_needed,
-                            'mile': milestones,
-                            'status': status_indicator
+                            'status': qe_overall_status,
+                            'progress': qe_progress_percentage,
+                            'entry': current_week_progress_entry,
+                            'release': str(next_release_date) if next_release_date else None,
+                            'size': qe_team_size,
+                            'task': qe_current_week_task,
+                            'tools': qe_automation_tools_used,
+                            'tc_created': tc_created,
+                            'tc_executed': tc_executed,
+                            'tc_passed': tc_passed_first_round,
+                            'effort_exec': effort_tc_execution,
+                            'tc_auto': tc_automated,
+                            'effort_auto': effort_tc_automation,
+                            'def_internal': defects_raised_internal,
+                            'sit': sit_defects,
+                            'uat': uat_defects,
+                            'reopened': reopened_defects
                         })
                         update_id = result.fetchone()[0]
-
-                        for area, data in rag_data.items():
-                            conn.execute(text("INSERT INTO RAG_Status (update_id, area, status, comment) VALUES (:uid, :area, :status, :comment)"), {
-                                'uid': update_id,
-                                'area': area,
-                                'status': data['status'],
-                                'comment': data['comment']
-                            })
-
-                        for risk in risks.split("\n"):
-                            if risk.strip():
-                                conn.execute(text("INSERT INTO Risks_Issues (update_id, type, description, owner, mitigation_eta) VALUES (:uid, 'Risk', :desc, 'TBD', 'TBD')"), {
-                                    'uid': update_id,
-                                    'desc': risk
-                                })
-
-                        for issue in issues.split("\n"):
-                            if issue.strip():
-                                conn.execute(text("INSERT INTO Risks_Issues (update_id, type, description, owner, mitigation_eta) VALUES (:uid, 'Issue', :desc, 'TBD', 'TBD')"), {
-                                    'uid': update_id,
-                                    'desc': issue
-                                })
-
-                        for action in action_items.split("\n"):
-                            if action.strip():
-                                conn.execute(text("INSERT INTO Action_Items (update_id, description, status, client_input_required) VALUES (:uid, :desc, 'Pending', :client)"), {
-                                    'uid': update_id,
-                                    'desc': action,
-                                    'client': 1 if client_inputs else 0
-                                })
-
                         conn.commit()
                         st.success("Weekly update submitted successfully!")
                     except Exception as e:
@@ -441,10 +475,9 @@ else:
 
     # View Reports
     elif option == "View Reports":
-        st.header("Project Report Generator")
+        st.header("QE Report Generator")
 
         with st.form("report_form"):
-            report_type = st.selectbox("Report Type", ["Weekly Summary", "Project History"])
             week_ending_date = st.date_input("Select Week Ending Date")
             projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
             project_dict = {row.project_name: row.project_id for row in projects}
@@ -457,16 +490,14 @@ else:
 
         if preview_report or download_report:
             base_query = """
-                        SELECT p.project_name, p.client_business_unit, p.project_manager, p.start_date, p.end_date, p.current_phase,
-                               w.accomplishments, w.decisions_needed, w.milestones, w.status_indicator,
-                               r.area, r.status, r.comment,
-                               ri.type, ri.description, ri.owner, ri.mitigation_eta,
-                               a.description AS action_description, a.status AS action_status, a.client_input_required
+                        SELECT p.project_name, p.client, p.project_spoc, p.technology_used, p.artifacts_link,
+                               w.qe_overall_status, w.qe_progress_percentage, w.current_week_progress_entry, w.next_release_date,
+                               w.qe_team_size, w.qe_current_week_task, w.qe_automation_tools_used,
+                               w.tc_created, w.tc_executed, w.tc_passed_first_round, w.effort_tc_execution,
+                               w.tc_automated, w.effort_tc_automation,
+                               w.defects_raised_internal, w.sit_defects, w.uat_defects, w.reopened_defects
                         FROM Weekly_Updates w
                         JOIN Projects p ON w.project_id = p.project_id
-                        LEFT JOIN RAG_Status r ON w.update_id = r.update_id
-                        LEFT JOIN Risks_Issues ri ON w.update_id = ri.update_id
-                        LEFT JOIN Action_Items a ON w.update_id = a.update_id
                         WHERE CAST(w.week_ending_date AS DATE) = :week
                     """
             params = {'week': str(week_ending_date)}
@@ -484,42 +515,28 @@ else:
                         pname = row[0]
                         if pname not in project_data:
                             project_data[pname] = {
-                                'client_business_unit': row[1],
-                                'project_manager': row[2],
-                                'start_date': row[3],
-                                'end_date': row[4],
-                                'current_phase': row[5],
-                                'accomplishments': row[6],
-                                'decisions_needed': row[7],
-                                'milestones': row[8],
-                                'status_indicator': row[9],
-                                'rag_status': [],
-                                'risks_issues': set(),
-                                'action_items': set()
+                                'client': row[1],
+                                'project_spoc': row[2],
+                                'technology_used': row[3],
+                                'artifacts_link': row[4],
+                                'qe_overall_status': row[5],
+                                'qe_progress_percentage': row[6],
+                                'current_week_progress_entry': row[7],
+                                'next_release_date': row[8],
+                                'qe_team_size': row[9],
+                                'qe_current_week_task': row[10],
+                                'qe_automation_tools_used': row[11],
+                                'tc_created': row[12],
+                                'tc_executed': row[13],
+                                'tc_passed_first_round': row[14],
+                                'effort_tc_execution': row[15],
+                                'tc_automated': row[16],
+                                'effort_tc_automation': row[17],
+                                'defects_raised_internal': row[18],
+                                'sit_defects': row[19],
+                                'uat_defects': row[20],
+                                'reopened_defects': row[21]
                             }
-                        if row[10]:
-                            project_data[pname]['rag_status'].append({
-                                'area': row[10], 'status': row[11], 'comment': row[12]
-                            })
-                        if row[13] and row[14]:
-                            project_data[pname]['risks_issues'].add((
-                                row[13], row[14], row[15], row[16]
-                            ))
-                        if row[17]:
-                            project_data[pname]['action_items'].add((
-                                row[17], row[18], row[19]
-                            ))
-
-                    # Convert sets back to lists for rendering
-                    for pname, details in project_data.items():
-                        details['risks_issues'] = [
-                            {'type': ri[0], 'description': ri[1], 'owner': ri[2], 'mitigation_eta': ri[3]}
-                            for ri in details['risks_issues']
-                        ]
-                        details['action_items'] = [
-                            {'description': ai[0], 'status': ai[1], 'client_input_required': ai[2]}
-                            for ai in details['action_items']
-                        ]
 
                     # Generate HTML for PDF
                     html = f"""
@@ -535,53 +552,60 @@ else:
                             li {{ margin-bottom: 5px; }}
                             .project-container {{ margin-bottom: 30px; page-break-inside: avoid; }}
                             .header {{ text-align: center; margin-bottom: 20px; }}
-                            .status-ontrack {{ color: green; }}
-                            .status-delayed {{ color: red; }}
+                            .status-green {{ color: green; }}
+                            .status-amber {{ color: orange; }}
+                            .status-red {{ color: red; }}
                         </style>
                     </head>
                     <body>
                         <div class="header">
-                            <h2>Weekly Report</h2>
+                            <h2>Weekly QE Status Report</h2>
                             <p>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p>
                         </div>
                     """
                     for idx, (pname, details) in enumerate(project_data.items()):
+                        status_class = details['qe_overall_status'].lower()
                         html += f"""
                         <div class="project-container" style="{'page-break-before: always;' if idx > 0 else ''}">
                             <h2>{pname}</h2>
-                            <p><strong>Client/BU:</strong> {details['client_business_unit']}</p>
-                            <p><strong>Project Manager:</strong> {details['project_manager']}</p>
-                            <p><strong>Duration:</strong> {details['start_date']} to {details['end_date']}</p>
-                            <p><strong>Phase:</strong> {details['current_phase']} | 
-                               <strong>Status:</strong> <span class="status-{'ontrack' if details['status_indicator']=='On Track' else 'delayed'}">{details['status_indicator']}</span></p>
+                            <p><strong>Client:</strong> {details['client']}</p>
+                            <p><strong>Project SPOC:</strong> {details['project_spoc']}</p>
+                            <p><strong>Technology Used:</strong> {details['technology_used']}</p>
+                            <p><strong>Artifacts Link:</strong> <a href="{details['artifacts_link']}">{details['artifacts_link']}</a></p>
 
-                            <h4>Accomplishments</h4>
+                            <h4>QE Status & Progress</h4>
+                            <p><strong>Overall Status:</strong> <span class="status-{status_class}">{details['qe_overall_status']}</span></p>
+                            <p><strong>Progress Percentage:</strong> {details['qe_progress_percentage']}%</p>
+                            <p><strong>Next Release Date:</strong> {details['next_release_date'] or 'N/A'}</p>
+                            <h5>Current Week Progress Entry</h5>
                             <ul>
-                                {"".join([f"<li>{line.strip()}</li>" for line in details['accomplishments'].splitlines() if line.strip()]) or "<li>No accomplishments reported</li>"}
+                                {"".join([f"<li>{line.strip()}</li>" for line in (details['current_week_progress_entry'] or '').splitlines() if line.strip()]) or "<li>No entry</li>"}
                             </ul>
 
-                            <h4>Decisions Needed</h4>
+                            <h4>QE Team & Resources</h4>
+                            <p><strong>Team Size:</strong> {details['qe_team_size']}</p>
+                            <h5>Current Week Task</h5>
                             <ul>
-                                {"".join([f"<li>{line.strip()}</li>" for line in details['decisions_needed'].splitlines() if line.strip()]) or "<li>No decisions needed</li>"}
+                                {"".join([f"<li>{line.strip()}</li>" for line in (details['qe_current_week_task'] or '').splitlines() if line.strip()]) or "<li>No tasks</li>"}
+                            </ul>
+                            <h5>Automation Tools Used</h5>
+                            <ul>
+                                {"".join([f"<li>{line.strip()}</li>" for line in (details['qe_automation_tools_used'] or '').splitlines() if line.strip()]) or "<li>None</li>"}
                             </ul>
 
-                            <h4>Milestones</h4>
-                            <p>{details['milestones'] or "None"}</p>
+                            <h4>Test Case Metrics</h4>
+                            <p><strong>#TC Created:</strong> {details['tc_created']}</p>
+                            <p><strong>#TC Executed:</strong> {details['tc_executed']}</p>
+                            <p><strong>#TC Passed in First Round:</strong> {details['tc_passed_first_round']}</p>
+                            <p><strong>Effort on TC Execution:</strong> {details['effort_tc_execution']} hours</p>
+                            <p><strong>#TC Automated:</strong> {details['tc_automated']}</p>
+                            <p><strong>Effort on TC Automation:</strong> {details['effort_tc_automation']} hours</p>
 
-                            <h4>RAG Status</h4>
-                            <ul>
-                                {"".join([f"<li><strong>{r['area']}</strong>: {r['status']} - {r['comment'] or 'No comment'}</li>" for r in details['rag_status']]) or "<li>No RAG status available</li>"}
-                            </ul>
-
-                            <h4>Risks & Issues</h4>
-                            <ul>
-                                {"".join([f"<li><strong>{ri['type']}</strong>: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})</li>" for ri in details['risks_issues']]) or "<li>No risks or issues</li>"}
-                            </ul>
-
-                            <h4>Action Items</h4>
-                            <ul>
-                                {"".join([f"<li>{a['description']} - {a['status']} (Client Input: {'Yes' if a['client_input_required'] else 'No'})</li>" for a in details['action_items']]) or "<li>No action items</li>"}
-                            </ul>
+                            <h4>Defects & Quality Metrics</h4>
+                            <p><strong>Defects Raised (Internal):</strong> {details['defects_raised_internal']}</p>
+                            <p><strong>#SIT Defects:</strong> {details['sit_defects']}</p>
+                            <p><strong>#UAT Defects:</strong> {details['uat_defects']}</p>
+                            <p><strong>#Reopened Defects:</strong> {details['reopened_defects']}</p>
                         </div>
                         """
                     html += """
@@ -601,47 +625,54 @@ else:
                                     st.markdown(f"### {pname}")
                                     col1, col2 = st.columns(2)
                                     with col1:
-                                        st.markdown(f"**Client/BU**: {details['client_business_unit']}")
-                                        st.markdown(f"**Project Manager**: {details['project_manager']}")
-                                        st.markdown(f"**Phase**: {details['current_phase']}")
+                                        st.markdown(f"**Client**: {details['client']}")
+                                        st.markdown(f"**Project SPOC**: {details['project_spoc']}")
+                                        st.markdown(f"**Technology Used**: {details['technology_used']}")
                                     with col2:
-                                        st.markdown(f"**Start Date**: {details['start_date']}")
-                                        st.markdown(f"**End Date**: {details['end_date']}")
-                                        st.markdown(f"**Status**: {details['status_indicator']}")
-                                    st.subheader("Accomplishments")
-                                    for line in [l.strip() for l in details['accomplishments'].splitlines() if l.strip()]:
+                                        st.markdown(f"**Artifacts Link**: [{details['artifacts_link']}]({details['artifacts_link']})")
+                                        st.markdown(f"**Overall Status**: {details['qe_overall_status']}")
+                                        st.markdown(f"**Progress Percentage**: {details['qe_progress_percentage']}%")
+                                    st.markdown(f"**Next Release Date**: {details['next_release_date'] or 'N/A'}")
+                                    
+                                    st.subheader("Current Week Progress Entry")
+                                    for line in [l.strip() for l in (details['current_week_progress_entry'] or '').splitlines() if l.strip()]:
                                         st.markdown(f"- {line}")
-                                    st.subheader("Decisions Needed")
-                                    for line in [l.strip() for l in details['decisions_needed'].splitlines() if l.strip()]:
+                                    if not details['current_week_progress_entry']:
+                                        st.markdown("- No entry")
+                                    
+                                    st.subheader("QE Team & Resources")
+                                    st.markdown(f"**Team Size**: {details['qe_team_size']}")
+                                    st.markdown("**Current Week Task**")
+                                    for line in [l.strip() for l in (details['qe_current_week_task'] or '').splitlines() if l.strip()]:
                                         st.markdown(f"- {line}")
-                                    st.subheader("Milestones")
-                                    st.markdown(details['milestones'] or "- None")
-                                    st.subheader("RAG Status")
-                                    if details['rag_status']:
-                                        for r in details['rag_status']:
-                                            st.markdown(f"- **{r['area']}**: {r['status']} - {r['comment'] or 'No comment'}")
-                                    else:
-                                        st.markdown("- No RAG status available")
-                                    st.subheader("Risks & Issues")
-                                    if details['risks_issues']:
-                                        for ri in details['risks_issues']:
-                                            st.markdown(f"- **{ri['type']}**: {ri['description']} (Owner: {ri['owner']}, ETA: {ri['mitigation_eta']})")
-                                    else:
-                                        st.markdown("- No risks or issues")
-                                    st.subheader("Action Items")
-                                    if details['action_items']:
-                                        for a in details['action_items']:
-                                            client_input = "Yes" if a['client_input_required'] else "No"
-                                            st.markdown(f"- {a['description']} - {a['status']} (Client Input: {client_input})")
-                                    else:
-                                        st.markdown("- No action items")
+                                    if not details['qe_current_week_task']:
+                                        st.markdown("- No tasks")
+                                    st.markdown("**Automation Tools Used**")
+                                    for line in [l.strip() for l in (details['qe_automation_tools_used'] or '').splitlines() if l.strip()]:
+                                        st.markdown(f"- {line}")
+                                    if not details['qe_automation_tools_used']:
+                                        st.markdown("- None")
+                                    
+                                    st.subheader("Test Case Metrics")
+                                    st.markdown(f"- **#TC Created**: {details['tc_created']}")
+                                    st.markdown(f"- **#TC Executed**: {details['tc_executed']}")
+                                    st.markdown(f"- **#TC Passed in First Round**: {details['tc_passed_first_round']}")
+                                    st.markdown(f"- **Effort on TC Execution**: {details['effort_tc_execution']} hours")
+                                    st.markdown(f"- **#TC Automated**: {details['tc_automated']}")
+                                    st.markdown(f"- **Effort on TC Automation**: {details['effort_tc_automation']} hours")
+                                    
+                                    st.subheader("Defects & Quality Metrics")
+                                    st.markdown(f"- **Defects Raised (Internal)**: {details['defects_raised_internal']}")
+                                    st.markdown(f"- **#SIT Defects**: {details['sit_defects']}")
+                                    st.markdown(f"- **#UAT Defects**: {details['uat_defects']}")
+                                    st.markdown(f"- **#Reopened Defects**: {details['reopened_defects']}")
                                     st.markdown("---")
 
                         # Always provide download option
                         st.download_button(
                             label="📄 Download PDF Report",
                             data=pdf_data,
-                            file_name=f"Weekly_Report_{week_ending_date.strftime('%Y%m%d')}.pdf",
+                            file_name=f"Weekly_QE_Report_{week_ending_date.strftime('%Y%m%d')}.pdf",
                             mime="application/pdf",
                             key="auto_download" if download_report else "preview_download",
                             on_click=lambda: None
