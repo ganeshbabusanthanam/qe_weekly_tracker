@@ -197,8 +197,8 @@ def init_db():
         conn = engine.connect()
         # Create Users table if it doesn't exist
         conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
-            CREATE TABLE Users (
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeUsers')
+            CREATE TABLE qeUsers (
                 user_id INT IDENTITY(1,1) PRIMARY KEY,
                 username NVARCHAR(50) UNIQUE NOT NULL,
                 password_hash NVARCHAR(255) NOT NULL
@@ -266,7 +266,7 @@ def verify_password(password, password_hash):
 def check_credentials(username, password, conn):
     try:
         result = conn.execute(
-            text("SELECT password_hash FROM Users WHERE username = :username"),
+            text("SELECT password_hash FROM qeUsers WHERE username = :username"),
             {'username': username}
         ).fetchone()
         if result and verify_password(password, result[0]):
@@ -320,7 +320,7 @@ if not st.session_state.authenticated:
                     try:
                         password_hash = hash_password(new_password)
                         conn.execute(
-                            text("INSERT INTO Users (username, password_hash) VALUES (:username, :password_hash)"),
+                            text("INSERT INTO qeUsers (username, password_hash) VALUES (:username, :password_hash)"),
                             {'username': new_username, 'password_hash': password_hash}
                         )
                         conn.commit()
