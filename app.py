@@ -429,7 +429,7 @@ else:
                     try:
                         project_id = project_dict[project_name]
                         insert_update = text("""
-                            INSERT INTO Weekly_Updates (
+                            INSERT INTO qeWeekly_Updates (
                                 project_id, week_ending_date, qe_overall_status, qe_progress_percentage,
                                 current_week_progress_entry, next_release_date, qe_team_size,
                                 qe_current_week_task, qe_automation_tools_used, tc_created,
