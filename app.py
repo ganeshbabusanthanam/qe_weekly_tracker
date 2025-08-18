@@ -496,7 +496,7 @@ else:
                                w.tc_created, w.tc_executed, w.tc_passed_first_round, w.effort_tc_execution,
                                w.tc_automated, w.effort_tc_automation,
                                w.defects_raised_internal, w.sit_defects, w.uat_defects, w.reopened_defects
-                        FROM Weekly_Updates w
+                        FROM qeWeekly_Updates w
                         JOIN qeProjects p ON w.project_id = p.project_id
                         WHERE CAST(w.week_ending_date AS DATE) = :week
                     """
