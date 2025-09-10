@@ -197,8 +197,8 @@ def init_db():
         conn = engine.connect()
         # Create Users table if it doesn't exist
         conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeUsers')
-            CREATE TABLE qeUsers (
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
+            CREATE TABLE Users (
                 user_id INT IDENTITY(1,1) PRIMARY KEY,
                 username NVARCHAR(50) UNIQUE NOT NULL,
                 password_hash NVARCHAR(255) NOT NULL
@@ -206,8 +206,8 @@ def init_db():
         """))
         # Create Projects table if it doesn't exist
         conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeProjects')
-            CREATE TABLE qeProjects (
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Projects')
+            CREATE TABLE Projects (
                 project_id INT IDENTITY(1,1) PRIMARY KEY,
                 project_name NVARCHAR(255) NOT NULL,
                 client NVARCHAR(255),
@@ -218,8 +218,8 @@ def init_db():
         """))
         # Create Weekly_Updates table if it doesn't exist
         conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeWeekly_Updates')
-            CREATE TABLE qeWeekly_Updates (
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Weekly_Updates')
+            CREATE TABLE Weekly_Updates (
                 update_id INT IDENTITY(1,1) PRIMARY KEY,
                 project_id INT NOT NULL,
                 week_ending_date DATE,
@@ -240,7 +240,35 @@ def init_db():
                 sit_defects INT,
                 uat_defects INT,
                 reopened_defects INT,
-                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id)
+                FOREIGN KEY (project_id) REFERENCES Projects(project_id)
+            )
+        """))
+        # Create Milestones table if it doesn't exist
+        conn.execute(text("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Milestones')
+            CREATE TABLE Milestones (
+                milestone_id INT IDENTITY(1,1) PRIMARY KEY,
+                project_id INT NOT NULL,
+                parent_milestone_id INT NULL,
+                milestone_name NVARCHAR(255) NOT NULL,
+                planned_start_date DATE,
+                planned_end_date DATE,
+                total_days INT,
+                weightage FLOAT,
+                notes NVARCHAR(MAX),
+                FOREIGN KEY (project_id) REFERENCES Projects(project_id),
+                FOREIGN KEY (parent_milestone_id) REFERENCES Milestones(milestone_id)
+            )
+        """))
+        # Create Milestone_Updates table if it doesn't exist
+        conn.execute(text("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Milestone_Updates')
+            CREATE TABLE Milestone_Updates (
+                update_id INT IDENTITY(1,1) PRIMARY KEY,
+                milestone_id INT NOT NULL,
+                week_ending_date DATE,
+                actual_progress FLOAT,
+                FOREIGN KEY (milestone_id) REFERENCES Milestones(milestone_id)
             )
         """))
         conn.commit()
@@ -266,7 +294,7 @@ def verify_password(password, password_hash):
 def check_credentials(username, password, conn):
     try:
         result = conn.execute(
-            text("SELECT password_hash FROM qeUsers WHERE username = :username"),
+            text("SELECT password_hash FROM Users WHERE username = :username"),
             {'username': username}
         ).fetchone()
         if result and verify_password(password, result[0]):
@@ -320,7 +348,7 @@ if not st.session_state.authenticated:
                     try:
                         password_hash = hash_password(new_password)
                         conn.execute(
-                            text("INSERT INTO qeUsers (username, password_hash) VALUES (:username, :password_hash)"),
+                            text("INSERT INTO Users (username, password_hash) VALUES (:username, :password_hash)"),
                             {'username': new_username, 'password_hash': password_hash}
                         )
                         conn.commit()
@@ -343,7 +371,7 @@ else:
 
     # Sidebar for navigation
     st.sidebar.header("Navigation")
-    option = st.sidebar.selectbox("Choose an option", ["Add Project", "Submit Weekly Update", "View Reports"])
+    option = st.sidebar.selectbox("Choose an option", ["Add Project", "Submit Weekly Update", "Add Milestone", "Submit Milestone Update", "View Reports"])
 
     # Add Project
     if option == "Add Project":
@@ -363,7 +391,7 @@ else:
                     try:
                         conn.execute(text("SELECT 1"))
                         insert_stmt = text("""
-                            INSERT INTO qeProjects (project_name, client, project_spoc, technology_used, artifacts_link)
+                            INSERT INTO Projects (project_name, client, project_spoc, technology_used, artifacts_link)
                             OUTPUT INSERTED.project_id
                             VALUES (:name, :client, :spoc, :tech, :link)
                         """)
@@ -389,7 +417,7 @@ else:
     # Submit Weekly Update
     elif option == "Submit Weekly Update":
         st.header("Weekly QE Update")
-        projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
+        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
 
         if not project_dict:
@@ -429,7 +457,7 @@ else:
                     try:
                         project_id = project_dict[project_name]
                         insert_update = text("""
-                            INSERT INTO qeWeekly_Updates (
+                            INSERT INTO Weekly_Updates (
                                 project_id, week_ending_date, qe_overall_status, qe_progress_percentage,
                                 current_week_progress_entry, next_release_date, qe_team_size,
                                 qe_current_week_task, qe_automation_tools_used, tc_created,
@@ -473,13 +501,105 @@ else:
                         st.error(f"Failed to submit weekly update: {e}")
                         raise
 
+    # Add Milestone
+    elif option == "Add Milestone":
+        st.header("Add New Milestone")
+        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+        project_dict = {row.project_name: row.project_id for row in projects}
+        if not project_dict:
+            st.error("No projects found. Please add a project first.")
+        else:
+            with st.form("milestone_form"):
+                project_name = st.selectbox("Select Project", list(project_dict.keys()))
+                project_id = project_dict[project_name]
+                milestone_name = st.text_input("Milestone Name")
+                parent_milestones = conn.execute(text("SELECT milestone_id, milestone_name FROM Milestones WHERE project_id = :pid AND parent_milestone_id IS NULL"), {'pid': project_id}).fetchall()
+                parent_dict = {"None": None} | {row.milestone_name: row.milestone_id for row in parent_milestones}
+                parent_milestone = st.selectbox("Parent Milestone (optional)", list(parent_dict.keys()))
+                planned_start_date = st.date_input("Planned Start Date")
+                planned_end_date = st.date_input("Planned End Date")
+                total_days = st.number_input("Total Days", min_value=0, step=1)
+                weightage = st.number_input("Weightage (%)", min_value=0.0, max_value=100.0, format="%.2f")
+                notes = st.text_area("Notes")
+                submit_milestone = st.form_submit_button("Submit Milestone")
+
+                if submit_milestone:
+                    if not milestone_name:
+                        st.error("Milestone Name is required!")
+                    elif planned_start_date > planned_end_date:
+                        st.error("Planned Start Date cannot be later than End Date!")
+                    else:
+                        try:
+                            parent_id = parent_dict[parent_milestone]
+                            insert_stmt = text("""
+                                INSERT INTO Milestones (project_id, parent_milestone_id, milestone_name, planned_start_date, planned_end_date, total_days, weightage, notes)
+                                OUTPUT INSERTED.milestone_id
+                                VALUES (:pid, :parent, :name, :start, :end, :days, :weight, :notes)
+                            """)
+                            result = conn.execute(insert_stmt, {
+                                'pid': project_id,
+                                'parent': parent_id,
+                                'name': milestone_name.strip(),
+                                'start': str(planned_start_date),
+                                'end': str(planned_end_date),
+                                'days': total_days,
+                                'weight': weightage,
+                                'notes': notes
+                            })
+                            milestone_id = result.fetchone()[0]
+                            conn.commit()
+                            st.success(f"Milestone added successfully with milestone_id: {milestone_id}")
+                        except Exception as e:
+                            st.error(f"Failed to add milestone: {e}")
+
+    # Submit Milestone Update
+    elif option == "Submit Milestone Update":
+        st.header("Submit Milestone Weekly Update")
+        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+        project_dict = {row.project_name: row.project_id for row in projects}
+        if not project_dict:
+            st.error("No projects found. Please add a project first.")
+        else:
+            with st.form("milestone_update_form"):
+                project_name = st.selectbox("Select Project", list(project_dict.keys()))
+                week_ending_date = st.date_input("Week Ending Date")
+                project_id = project_dict[project_name]
+                milestones = conn.execute(text("SELECT milestone_id, milestone_name, parent_milestone_id FROM Milestones WHERE project_id = :pid ORDER BY parent_milestone_id, milestone_id"), {'pid': project_id}).fetchall()
+                progress_dict = {}
+                for m in milestones:
+                    m_id, m_name, parent_id = m
+                    label = m_name if parent_id is None else f"  - {m_name}"
+                    progress_dict[m_id] = st.number_input(f"Actual Progress % for {label}", min_value=0.0, max_value=100.0, format="%.2f", value=0.0)
+                submit_m_update = st.form_submit_button("Submit Milestone Update")
+
+                if submit_m_update:
+                    try:
+                        for m_id, progress in progress_dict.items():
+                            # Check if update already exists for this week
+                            existing = conn.execute(text("SELECT 1 FROM Milestone_Updates WHERE milestone_id = :mid AND week_ending_date = :week"), {'mid': m_id, 'week': str(week_ending_date)}).fetchone()
+                            if existing:
+                                conn.execute(text("""
+                                    UPDATE Milestone_Updates SET actual_progress = :progress
+                                    WHERE milestone_id = :mid AND week_ending_date = :week
+                                """), {'progress': progress / 100, 'mid': m_id, 'week': str(week_ending_date)})
+                            else:
+                                conn.execute(text("""
+                                    INSERT INTO Milestone_Updates (milestone_id, week_ending_date, actual_progress)
+                                    VALUES (:mid, :week, :progress)
+                                """), {'mid': m_id, 'week': str(week_ending_date), 'progress': progress / 100})
+                        conn.commit()
+                        st.success("Milestone updates submitted successfully!")
+                    except Exception as e:
+                        st.error(f"Failed to submit milestone updates: {e}")
+
     # View Reports
     elif option == "View Reports":
         st.header("QE Report Generator")
 
         with st.form("report_form"):
+            report_type = st.selectbox("Report Type", ["Weekly Summary", "Project History"])
             week_ending_date = st.date_input("Select Week Ending Date")
-            projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
+            projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
             project_dict = {row.project_name: row.project_id for row in projects}
             project_name = st.selectbox("Select Project (Optional)", ["All"] + list(project_dict.keys()))
             col1, col2 = st.columns(2)
@@ -490,16 +610,16 @@ else:
 
         if preview_report or download_report:
             base_query = """
-                        SELECT p.project_name, p.client, p.project_spoc, p.technology_used, p.artifacts_link,
-                               w.qe_overall_status, w.qe_progress_percentage, w.current_week_progress_entry, w.next_release_date,
-                               w.qe_team_size, w.qe_current_week_task, w.qe_automation_tools_used,
-                               w.tc_created, w.tc_executed, w.tc_passed_first_round, w.effort_tc_execution,
-                               w.tc_automated, w.effort_tc_automation,
-                               w.defects_raised_internal, w.sit_defects, w.uat_defects, w.reopened_defects
-                        FROM qeWeekly_Updates w
-                        JOIN qeProjects p ON w.project_id = p.project_id
-                        WHERE CAST(w.week_ending_date AS DATE) = :week
-                    """
+                SELECT p.project_name, p.client, p.project_spoc, p.technology_used, p.artifacts_link,
+                       w.qe_overall_status, w.qe_progress_percentage, w.current_week_progress_entry, w.next_release_date,
+                       w.qe_team_size, w.qe_current_week_task, w.qe_automation_tools_used,
+                       w.tc_created, w.tc_executed, w.tc_passed_first_round, w.effort_tc_execution,
+                       w.tc_automated, w.effort_tc_automation,
+                       w.defects_raised_internal, w.sit_defects, w.uat_defects, w.reopened_defects
+                FROM Weekly_Updates w
+                JOIN Projects p ON w.project_id = p.project_id
+                WHERE CAST(w.week_ending_date AS DATE) = :week
+            """
             params = {'week': str(week_ending_date)}
             if project_name != "All":
                 base_query += " AND p.project_name = :project_name"
@@ -538,6 +658,54 @@ else:
                                 'reopened_defects': row[21]
                             }
 
+                    # Fetch milestone data for each project
+                    milestone_data = {}
+                    for pname, details in project_data.items():
+                        pid = project_dict[pname]
+                        milestone_query = """
+                            SELECT m.milestone_id, m.milestone_name, m.parent_milestone_id, m.planned_start_date, m.planned_end_date, m.total_days, m.weightage, m.notes,
+                                   mu.actual_progress
+                            FROM Milestones m
+                            LEFT JOIN Milestone_Updates mu ON m.milestone_id = mu.milestone_id AND CAST(mu.week_ending_date AS DATE) = :week
+                            WHERE m.project_id = :pid
+                        """
+                        milestone_params = {'week': str(week_ending_date), 'pid': pid}
+                        milestone_result = conn.execute(text(milestone_query), milestone_params)
+                        milestones = milestone_result.fetchall()
+                        milestone_list = []
+                        for m in milestones:
+                            m_id, m_name, parent_id, start_str, end_str, total_days, weightage, notes, actual_progress = m
+                            actual_progress = actual_progress or 0.0
+                            start = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else None
+                            end = datetime.strptime(end_str, '%Y-%m-%d').date() if end_str else None
+                            reference_date = week_ending_date
+                            current_status = "✅Completed" if actual_progress == 1 else "⏳ Pending" if actual_progress == 0 else "🕒 In Progress"
+                            expected_progress = 0
+                            if start and end and total_days:
+                                if reference_date <= start:
+                                    expected_progress = 0
+                                elif reference_date > end:
+                                    expected_progress = 1
+                                else:
+                                    days_passed = (reference_date - start).days
+                                    expected_progress = days_passed / total_days
+                            rag = "" if not start or start > reference_date else "🚩 Critical" if actual_progress < expected_progress - 0.2 else "⚠️ At Risk" if actual_progress < expected_progress - 0.05 else "✅ On Track"
+                            milestone_list.append({
+                                'milestone_id': m_id,
+                                'name': m_name,
+                                'parent_id': parent_id,
+                                'planned_start': start_str,
+                                'planned_end': end_str,
+                                'total_days': total_days,
+                                'weightage': weightage,
+                                'current_status': current_status,
+                                'actual_progress': actual_progress * 100,
+                                'expected_progress': expected_progress * 100,
+                                'rag': rag,
+                                'notes': notes
+                            })
+                        milestone_data[pname] = milestone_list
+
                     # Generate HTML for PDF
                     html = f"""
                     <!DOCTYPE html>
@@ -555,6 +723,10 @@ else:
                             .status-green {{ color: green; }}
                             .status-amber {{ color: orange; }}
                             .status-red {{ color: red; }}
+                            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                            th {{ background-color: #f2f2f2; }}
+                            .sub-milestone {{ padding-left: 20px; }}
                         </style>
                     </head>
                     <body>
@@ -586,7 +758,7 @@ else:
                             <p><strong>Team Size:</strong> {details['qe_team_size']}</p>
                             <h5>Current Week Task</h5>
                             <ul>
-                                {"".join([f"<li>{line.strip()}</li>" for line in (details['qe_current_week_task'] or '').splitlines() if line.strip()]) or "<li>No tasks</li>"}
+                                {"".join([f"<li>{line.strip()}</li>" for line in (details['current_week_progress_entry'] or '').splitlines() if line.strip()]) or "<li>No tasks</li>"}
                             </ul>
                             <h5>Automation Tools Used</h5>
                             <ul>
@@ -606,6 +778,26 @@ else:
                             <p><strong>#SIT Defects:</strong> {details['sit_defects']}</p>
                             <p><strong>#UAT Defects:</strong> {details['uat_defects']}</p>
                             <p><strong>#Reopened Defects:</strong> {details['reopened_defects']}</p>
+
+                            <h4 style="page-break-before: always;">Milestone Tracking</h4>
+                            <table>
+                                <tr>
+                                    <th>Milestone</th>
+                                    <th>Planned Start Date</th>
+                                    <th>Planned End Date</th>
+                                    <th>Total Days</th>
+                                    <th>Weightage</th>
+                                    <th>Current Status</th>
+                                    <th>Actual Progress %</th>
+                                    <th>Expected Progress %</th>
+                                    <th>Progress Status (RAG)</th>
+                                    <th>Notes</th>
+                                </tr>
+                                {''.join([
+                                    f'<tr><td class="{"" if m["parent_id"] is None else "sub-milestone"}">{m["name"]}</td><td>{m["planned_start"]}</td><td>{m["planned_end"]}</td><td>{m["total_days"]}</td><td>{m["weightage"]*100 if m["weightage"] else ""}%</td><td>{m["current_status"]}</td><td>{m["actual_progress"]}%</td><td>{m["expected_progress"]}%</td><td>{m["rag"]}</td><td>{m["notes"]}</td></tr>'
+                                    for m in milestone_data[pname]
+                                ]) or '<tr><td colspan="10">No milestones available</td></tr>'}
+                            </table>
                         </div>
                         """
                     html += """
@@ -666,6 +858,26 @@ else:
                                     st.markdown(f"- **#SIT Defects**: {details['sit_defects']}")
                                     st.markdown(f"- **#UAT Defects**: {details['uat_defects']}")
                                     st.markdown(f"- **#Reopened Defects**: {details['reopened_defects']}")
+                                    
+                                    st.subheader("Milestone Tracking")
+                                    if milestone_data.get(pname):
+                                        df = pd.DataFrame([
+                                            {
+                                                'Milestone': m['name'] if m['parent_id'] is None else f"  - {m['name']}",
+                                                'Planned Start Date': m['planned_start'],
+                                                'Planned End Date': m['planned_end'],
+                                                'Total Days': m['total_days'],
+                                                'Weightage': f"{m['weightage']*100}%" if m['weightage'] else "",
+                                                'Current Status': m['current_status'],
+                                                'Actual Progress %': f"{m['actual_progress']}%",
+                                                'Expected Progress %': f"{m['expected_progress']}%",
+                                                'Progress Status (RAG)': m['rag'],
+                                                'Notes': m['notes']
+                                            } for m in milestone_data[pname]
+                                        ])
+                                        st.table(df)
+                                    else:
+                                        st.markdown("- No milestones available")
                                     st.markdown("---")
 
                         # Always provide download option
