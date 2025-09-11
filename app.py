@@ -195,10 +195,10 @@ def init_db():
         connection_url = f"mssql+pymssql://{username}:{password}@{server}:1433/{database}"
         engine = create_engine(connection_url)
         conn = engine.connect()
-        # Create Users table if it doesn't exist
+        # Create qeUsers table if it doesn't exist
         conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
-            CREATE TABLE Users (
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeUsers')
+            CREATE TABLE qeUsers (
                 user_id INT IDENTITY(1,1) PRIMARY KEY,
                 username NVARCHAR(50) UNIQUE NOT NULL,
                 password_hash NVARCHAR(255) NOT NULL
@@ -206,8 +206,8 @@ def init_db():
         """))
         # Create Projects table if it doesn't exist
         conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Projects')
-            CREATE TABLE Projects (
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeProjects')
+            CREATE TABLE qeProjects (
                 project_id INT IDENTITY(1,1) PRIMARY KEY,
                 project_name NVARCHAR(255) NOT NULL,
                 client NVARCHAR(255),
@@ -218,8 +218,8 @@ def init_db():
         """))
         # Create Weekly_Updates table if it doesn't exist
         conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Weekly_Updates')
-            CREATE TABLE Weekly_Updates (
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeWeekly_Updates')
+            CREATE TABLE qeWeekly_Updates (
                 update_id INT IDENTITY(1,1) PRIMARY KEY,
                 project_id INT NOT NULL,
                 week_ending_date DATE,
@@ -240,7 +240,7 @@ def init_db():
                 sit_defects INT,
                 uat_defects INT,
                 reopened_defects INT,
-                FOREIGN KEY (project_id) REFERENCES Projects(project_id)
+                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id)
             )
         """))
         # Create Milestones table if it doesn't exist
@@ -256,7 +256,7 @@ def init_db():
                 total_days INT,
                 weightage FLOAT,
                 notes NVARCHAR(MAX),
-                FOREIGN KEY (project_id) REFERENCES Projects(project_id),
+                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id),
                 FOREIGN KEY (parent_milestone_id) REFERENCES Milestones(milestone_id)
             )
         """))
@@ -294,7 +294,7 @@ def verify_password(password, password_hash):
 def check_credentials(username, password, conn):
     try:
         result = conn.execute(
-            text("SELECT password_hash FROM Users WHERE username = :username"),
+            text("SELECT password_hash FROM qeUsers WHERE username = :username"),
             {'username': username}
         ).fetchone()
         if result and verify_password(password, result[0]):
@@ -331,7 +331,7 @@ if not st.session_state.authenticated:
             else:
                 st.error("Invalid username or password")
     
-    # Admin option to add new users (for initial setup or admin access)
+    # Admin option to add new qeUsers (for initial setup or admin access)
     with st.expander("Admin: Add New User"):
         with st.form("add_user_form"):
             new_username = st.text_input("New Username")
@@ -348,7 +348,7 @@ if not st.session_state.authenticated:
                     try:
                         password_hash = hash_password(new_password)
                         conn.execute(
-                            text("INSERT INTO Users (username, password_hash) VALUES (:username, :password_hash)"),
+                            text("INSERT INTO qeUsers (username, password_hash) VALUES (:username, :password_hash)"),
                             {'username': new_username, 'password_hash': password_hash}
                         )
                         conn.commit()
@@ -391,7 +391,7 @@ else:
                     try:
                         conn.execute(text("SELECT 1"))
                         insert_stmt = text("""
-                            INSERT INTO Projects (project_name, client, project_spoc, technology_used, artifacts_link)
+                            INSERT INTO qeProjects (project_name, client, project_spoc, technology_used, artifacts_link)
                             OUTPUT INSERTED.project_id
                             VALUES (:name, :client, :spoc, :tech, :link)
                         """)
@@ -411,13 +411,13 @@ else:
                             st.success(f"Project added successfully with project_id: {project_id}")
                     except Exception as e:
                         st.error(f"Failed to add project: {e}")
-                        st.write("Debug Info: Check if 'Projects' table exists and has an auto-incrementing 'project_id' column.")
+                        st.write("Debug Info: Check if 'qeProjects' table exists and has an auto-incrementing 'project_id' column.")
                         raise
 
     # Submit Weekly Update
     elif option == "Submit Weekly Update":
         st.header("Weekly QE Update")
-        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+        projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
 
         if not project_dict:
@@ -457,7 +457,7 @@ else:
                     try:
                         project_id = project_dict[project_name]
                         insert_update = text("""
-                            INSERT INTO Weekly_Updates (
+                            INSERT INTO qeWeekly_Updates (
                                 project_id, week_ending_date, qe_overall_status, qe_progress_percentage,
                                 current_week_progress_entry, next_release_date, qe_team_size,
                                 qe_current_week_task, qe_automation_tools_used, tc_created,
@@ -504,7 +504,7 @@ else:
     # Add Milestone
     elif option == "Add Milestone":
         st.header("Add New Milestone")
-        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+        projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
         if not project_dict:
             st.error("No projects found. Please add a project first.")
@@ -555,7 +555,7 @@ else:
     # Submit Milestone Update
     elif option == "Submit Milestone Update":
         st.header("Submit Milestone Weekly Update")
-        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+        projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
         if not project_dict:
             st.error("No projects found. Please add a project first.")
@@ -599,7 +599,7 @@ else:
         with st.form("report_form"):
             report_type = st.selectbox("Report Type", ["Weekly Summary", "Project History"])
             week_ending_date = st.date_input("Select Week Ending Date")
-            projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
+            projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
             project_dict = {row.project_name: row.project_id for row in projects}
             project_name = st.selectbox("Select Project (Optional)", ["All"] + list(project_dict.keys()))
             col1, col2 = st.columns(2)
@@ -616,8 +616,8 @@ else:
                        w.tc_created, w.tc_executed, w.tc_passed_first_round, w.effort_tc_execution,
                        w.tc_automated, w.effort_tc_automation,
                        w.defects_raised_internal, w.sit_defects, w.uat_defects, w.reopened_defects
-                FROM Weekly_Updates w
-                JOIN Projects p ON w.project_id = p.project_id
+                FROM qeWeekly_Updates w
+                JOIN qeProjects p ON w.project_id = p.project_id
                 WHERE CAST(w.week_ending_date AS DATE) = :week
             """
             params = {'week': str(week_ending_date)}
