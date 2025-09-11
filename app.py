@@ -195,86 +195,123 @@ def init_db():
         connection_url = f"mssql+pymssql://{username}:{password}@{server}:1433/{database}"
         engine = create_engine(connection_url)
         conn = engine.connect()
+        
+        # Check if tables exist
+        tables_check = conn.execute(text("""
+            SELECT TABLE_NAME 
+            FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_NAME IN ('qeUsers', 'qeProjects', 'qeWeekly_Updates', 'Milestones', 'Milestone_Updates')
+        """)).fetchall()
+        existing_tables = [row[0] for row in tables_check]
+        st.info(f"Existing tables: {existing_tables}")
+
         # Create qeUsers table if it doesn't exist
-        conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeUsers')
-            CREATE TABLE qeUsers (
-                user_id INT IDENTITY(1,1) PRIMARY KEY,
-                username NVARCHAR(50) UNIQUE NOT NULL,
-                password_hash NVARCHAR(255) NOT NULL
-            )
-        """))
-        # Create Projects table if it doesn't exist
-        conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeProjects')
-            CREATE TABLE qeProjects (
-                project_id INT IDENTITY(1,1) PRIMARY KEY,
-                project_name NVARCHAR(255) NOT NULL,
-                client NVARCHAR(255),
-                project_spoc NVARCHAR(255),
-                technology_used NVARCHAR(255),
-                artifacts_link NVARCHAR(MAX)
-            )
-        """))
-        # Create Weekly_Updates table if it doesn't exist
-        conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'qeWeekly_Updates')
-            CREATE TABLE qeWeekly_Updates (
-                update_id INT IDENTITY(1,1) PRIMARY KEY,
-                project_id INT NOT NULL,
-                week_ending_date DATE,
-                qe_overall_status NVARCHAR(10),
-                qe_progress_percentage INT,
-                current_week_progress_entry NVARCHAR(MAX),
-                next_release_date DATE,
-                qe_team_size INT,
-                qe_current_week_task NVARCHAR(MAX),
-                qe_automation_tools_used NVARCHAR(MAX),
-                tc_created INT,
-                tc_executed INT,
-                tc_passed_first_round INT,
-                effort_tc_execution FLOAT,
-                tc_automated INT,
-                effort_tc_automation FLOAT,
-                defects_raised_internal INT,
-                sit_defects INT,
-                uat_defects INT,
-                reopened_defects INT,
-                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id)
-            )
-        """))
+        if 'qeUsers' not in existing_tables:
+            conn.execute(text("""
+                CREATE TABLE qeUsers (
+                    user_id INT IDENTITY(1,1) PRIMARY KEY,
+                    username NVARCHAR(50) UNIQUE NOT NULL,
+                    password_hash NVARCHAR(255) NOT NULL
+                )
+            """))
+            st.success("qeUsers table created successfully.")
+
+        # Create qeProjects table if it doesn't exist
+        if 'qeProjects' not in existing_tables:
+            conn.execute(text("""
+                CREATE TABLE qeProjects (
+                    project_id INT IDENTITY(1,1) PRIMARY KEY,
+                    project_name NVARCHAR(255) NOT NULL,
+                    client NVARCHAR(255),
+                    project_spoc NVARCHAR(255),
+                    technology_used NVARCHAR(255),
+                    artifacts_link NVARCHAR(MAX)
+                )
+            """))
+            st.success("qeProjects table created successfully.")
+        else:
+            # Validate qeProjects table schema
+            result = conn.execute(text("""
+                SELECT COLUMN_NAME 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = 'qeProjects'
+            """)).fetchall()
+            expected_columns = ['project_id', 'project_name', 'client', 'project_spoc', 'technology_used', 'artifacts_link']
+            actual_columns = [row[0] for row in result]
+            if not all(col in actual_columns for col in expected_columns):
+                missing_columns = [col for col in expected_columns if col not in actual_columns]
+                st.error(f"qeProjects table is missing columns: {', '.join(missing_columns)}. Use the 'Admin: Fix qeProjects Table' option to correct the schema.")
+                raise Exception(f"qeProjects table schema validation failed: Missing columns {missing_columns}")
+
+        # Create qeWeekly_Updates table if it doesn't exist
+        if 'qeWeekly_Updates' not in existing_tables:
+            conn.execute(text("""
+                CREATE TABLE qeWeekly_Updates (
+                    update_id INT IDENTITY(1,1) PRIMARY KEY,
+                    project_id INT NOT NULL,
+                    week_ending_date DATE,
+                    qe_overall_status NVARCHAR(10),
+                    qe_progress_percentage INT,
+                    current_week_progress_entry NVARCHAR(MAX),
+                    next_release_date DATE,
+                    qe_team_size INT,
+                    qe_current_week_task NVARCHAR(MAX),
+                    qe_automation_tools_used NVARCHAR(MAX),
+                    tc_created INT,
+                    tc_executed INT,
+                    tc_passed_first_round INT,
+                    effort_tc_execution FLOAT,
+                    tc_automated INT,
+                    effort_tc_automation FLOAT,
+                    defects_raised_internal INT,
+                    sit_defects INT,
+                    uat_defects INT,
+                    reopened_defects INT,
+                    FOREIGN KEY (project_id) REFERENCES qeProjects(project_id)
+                )
+            """))
+            st.success("qeWeekly_Updates table created successfully.")
+
         # Create Milestones table if it doesn't exist
-        conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Milestones')
-            CREATE TABLE Milestones (
-                milestone_id INT IDENTITY(1,1) PRIMARY KEY,
-                project_id INT NOT NULL,
-                parent_milestone_id INT NULL,
-                milestone_name NVARCHAR(255) NOT NULL,
-                planned_start_date DATE,
-                planned_end_date DATE,
-                total_days INT,
-                weightage FLOAT,
-                notes NVARCHAR(MAX),
-                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id),
-                FOREIGN KEY (parent_milestone_id) REFERENCES Milestones(milestone_id)
-            )
-        """))
+        if 'Milestones' not in existing_tables:
+            conn.execute(text("""
+                CREATE TABLE Milestones (
+                    milestone_id INT IDENTITY(1,1) PRIMARY KEY,
+                    project_id INT NOT NULL,
+                    parent_milestone_id INT NULL,
+                    milestone_name NVARCHAR(255) NOT NULL,
+                    planned_start_date DATE NOT NULL,
+                    planned_end_date DATE NOT NULL,
+                    total_days INT NOT NULL,
+                    weightage FLOAT NOT NULL,
+                    notes NVARCHAR(MAX),
+                    FOREIGN KEY (project_id) REFERENCES qeProjects(project_id),
+                    FOREIGN KEY (parent_milestone_id) REFERENCES Milestones(milestone_id),
+                    CONSTRAINT CHK_Dates CHECK (planned_start_date <= planned_end_date),
+                    CONSTRAINT CHK_TotalDays CHECK (total_days >= 0),
+                    CONSTRAINT CHK_Weightage CHECK (weightage >= 0 AND weightage <= 1)
+                )
+            """))
+            st.success("Milestones table created successfully.")
+
         # Create Milestone_Updates table if it doesn't exist
-        conn.execute(text("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Milestone_Updates')
-            CREATE TABLE Milestone_Updates (
-                update_id INT IDENTITY(1,1) PRIMARY KEY,
-                milestone_id INT NOT NULL,
-                week_ending_date DATE,
-                actual_progress FLOAT,
-                FOREIGN KEY (milestone_id) REFERENCES Milestones(milestone_id)
-            )
-        """))
+        if 'Milestone_Updates' not in existing_tables:
+            conn.execute(text("""
+                CREATE TABLE Milestone_Updates (
+                    update_id INT IDENTITY(1,1) PRIMARY KEY,
+                    milestone_id INT NOT NULL,
+                    week_ending_date DATE NOT NULL,
+                    actual_progress FLOAT NOT NULL,
+                    FOREIGN KEY (milestone_id) REFERENCES Milestones(milestone_id),
+                    CONSTRAINT CHK_ActualProgress CHECK (actual_progress >= 0 AND actual_progress <= 1)
+                )
+            """))
+            st.success("Milestone_Updates table created successfully.")
+
         conn.commit()
         return conn, engine
     except Exception as e:
-        st.error(f"DB Connection Failed: {e}")
+        st.error(f"DB Connection or Schema Validation Failed: {e}")
         raise
 
 def convert_html_to_pdf(html_content):
@@ -331,7 +368,7 @@ if not st.session_state.authenticated:
             else:
                 st.error("Invalid username or password")
     
-    # Admin option to add new qeUsers (for initial setup or admin access)
+    # Admin option to add new users
     with st.expander("Admin: Add New User"):
         with st.form("add_user_form"):
             new_username = st.text_input("New Username")
@@ -356,6 +393,97 @@ if not st.session_state.authenticated:
                     except Exception as e:
                         st.error(f"Failed to add user: {e}")
     
+    # Admin option to fix qeProjects table
+    with st.expander("Admin: Fix qeProjects Table"):
+        with st.form("fix_projects_form"):
+            auth_code = st.text_input("Authentication Code", type="password")
+            fix_button = st.form_submit_button("Fix qeProjects Table")
+            
+            if fix_button:
+                if not auth_code:
+                    st.error("Please enter the Authentication Code")
+                elif auth_code != "SECURE123":
+                    st.error("Invalid Authentication Code")
+                else:
+                    try:
+                        # Drop dependent tables first due to foreign key constraints
+                        conn.execute(text("DROP TABLE IF EXISTS qeWeekly_Updates"))
+                        conn.execute(text("DROP TABLE IF EXISTS Milestones"))
+                        conn.execute(text("DROP TABLE IF EXISTS Milestone_Updates"))
+                        conn.execute(text("DROP TABLE IF EXISTS qeProjects"))
+                        
+                        # Recreate qeProjects table
+                        conn.execute(text("""
+                            CREATE TABLE qeProjects (
+                                project_id INT IDENTITY(1,1) PRIMARY KEY,
+                                project_name NVARCHAR(255) NOT NULL,
+                                client NVARCHAR(255),
+                                project_spoc NVARCHAR(255),
+                                technology_used NVARCHAR(255),
+                                artifacts_link NVARCHAR(MAX)
+                            )
+                        """))
+                        # Recreate qeWeekly_Updates table
+                        conn.execute(text("""
+                            CREATE TABLE qeWeekly_Updates (
+                                update_id INT IDENTITY(1,1) PRIMARY KEY,
+                                project_id INT NOT NULL,
+                                week_ending_date DATE,
+                                qe_overall_status NVARCHAR(10),
+                                qe_progress_percentage INT,
+                                current_week_progress_entry NVARCHAR(MAX),
+                                next_release_date DATE,
+                                qe_team_size INT,
+                                qe_current_week_task NVARCHAR(MAX),
+                                qe_automation_tools_used NVARCHAR(MAX),
+                                tc_created INT,
+                                tc_executed INT,
+                                tc_passed_first_round INT,
+                                effort_tc_execution FLOAT,
+                                tc_automated INT,
+                                effort_tc_automation FLOAT,
+                                defects_raised_internal INT,
+                                sit_defects INT,
+                                uat_defects INT,
+                                reopened_defects INT,
+                                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id)
+                            )
+                        """))
+                        # Recreate Milestones table
+                        conn.execute(text("""
+                            CREATE TABLE Milestones (
+                                milestone_id INT IDENTITY(1,1) PRIMARY KEY,
+                                project_id INT NOT NULL,
+                                parent_milestone_id INT NULL,
+                                milestone_name NVARCHAR(255) NOT NULL,
+                                planned_start_date DATE NOT NULL,
+                                planned_end_date DATE NOT NULL,
+                                total_days INT NOT NULL,
+                                weightage FLOAT NOT NULL,
+                                notes NVARCHAR(MAX),
+                                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id),
+                                FOREIGN KEY (parent_milestone_id) REFERENCES Milestones(milestone_id),
+                                CONSTRAINT CHK_Dates CHECK (planned_start_date <= planned_end_date),
+                                CONSTRAINT CHK_TotalDays CHECK (total_days >= 0),
+                                CONSTRAINT CHK_Weightage CHECK (weightage >= 0 AND weightage <= 1)
+                            )
+                        """))
+                        # Recreate Milestone_Updates table
+                        conn.execute(text("""
+                            CREATE TABLE Milestone_Updates (
+                                update_id INT IDENTITY(1,1) PRIMARY KEY,
+                                milestone_id INT NOT NULL,
+                                week_ending_date DATE NOT NULL,
+                                actual_progress FLOAT NOT NULL,
+                                FOREIGN KEY (milestone_id) REFERENCES Milestones(milestone_id),
+                                CONSTRAINT CHK_ActualProgress CHECK (actual_progress >= 0 AND actual_progress <= 1)
+                            )
+                        """))
+                        conn.commit()
+                        st.success("qeProjects table and dependent tables recreated successfully.")
+                    except Exception as e:
+                        st.error(f"Failed to recreate qeProjects table: {e}")
+    
     conn.close()
     engine.dispose()
 else:
@@ -371,7 +499,14 @@ else:
 
     # Sidebar for navigation
     st.sidebar.header("Navigation")
-    option = st.sidebar.selectbox("Choose an option", ["Add Project", "Submit Weekly Update", "Add Milestone", "Submit Milestone Update", "View Reports"])
+    option = st.sidebar.selectbox("Choose an option", [
+        "Add Project", 
+        "Submit Weekly Update", 
+        "Add Milestone", 
+        "Submit Milestone Update", 
+        "View Reports", 
+        "View Milestone Updates"
+    ])
 
     # Add Project
     if option == "Add Project":
@@ -543,7 +678,7 @@ else:
                                 'start': str(planned_start_date),
                                 'end': str(planned_end_date),
                                 'days': total_days,
-                                'weight': weightage,
+                                'weight': weightage / 100,
                                 'notes': notes
                             })
                             milestone_id = result.fetchone()[0]
@@ -564,33 +699,111 @@ else:
                 project_name = st.selectbox("Select Project", list(project_dict.keys()))
                 week_ending_date = st.date_input("Week Ending Date")
                 project_id = project_dict[project_name]
-                milestones = conn.execute(text("SELECT milestone_id, milestone_name, parent_milestone_id FROM Milestones WHERE project_id = :pid ORDER BY parent_milestone_id, milestone_id"), {'pid': project_id}).fetchall()
-                progress_dict = {}
-                for m in milestones:
-                    m_id, m_name, parent_id = m
-                    label = m_name if parent_id is None else f"  - {m_name}"
-                    progress_dict[m_id] = st.number_input(f"Actual Progress % for {label}", min_value=0.0, max_value=100.0, format="%.2f", value=0.0)
-                submit_m_update = st.form_submit_button("Submit Milestone Update")
-
-                if submit_m_update:
-                    try:
-                        for m_id, progress in progress_dict.items():
-                            # Check if update already exists for this week
-                            existing = conn.execute(text("SELECT 1 FROM Milestone_Updates WHERE milestone_id = :mid AND week_ending_date = :week"), {'mid': m_id, 'week': str(week_ending_date)}).fetchone()
-                            if existing:
-                                conn.execute(text("""
-                                    UPDATE Milestone_Updates SET actual_progress = :progress
-                                    WHERE milestone_id = :mid AND week_ending_date = :week
-                                """), {'progress': progress / 100, 'mid': m_id, 'week': str(week_ending_date)})
+                milestones = conn.execute(
+                    text("""
+                        SELECT milestone_id, milestone_name, parent_milestone_id, planned_start_date, planned_end_date, total_days
+                        FROM Milestones 
+                        WHERE project_id = :pid 
+                        ORDER BY parent_milestone_id, milestone_id
+                    """), 
+                    {'pid': project_id}
+                ).fetchall()
+                
+                if not milestones:
+                    st.error("No milestones found for this project. Please add milestones first.")
+                else:
+                    # Prepare a table to display milestones and their calculated fields
+                    st.subheader("Milestone Progress Updates")
+                    progress_data = []
+                    for m in milestones:
+                        m_id, m_name, parent_id, start_str, end_str, total_days = m
+                        label = m_name if parent_id is None else f"  - {m_name}"
+                        actual_progress = st.number_input(
+                            f"Actual Progress % for {label}", 
+                            min_value=0.0, 
+                            max_value=100.0, 
+                            format="%.2f", 
+                            value=0.0, 
+                            key=f"progress_{m_id}"
+                        )
+                        actual_progress = actual_progress / 100  # Convert to fraction for calculations
+                        
+                        # Calculate derived fields
+                        start = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else None
+                        end = datetime.strptime(end_str, '%Y-%m-%d').date() if end_str else None
+                        reference_date = week_ending_date
+                        
+                        # Current Status
+                        current_status = (
+                            "✅Completed" if actual_progress == 1 
+                            else "⏳ Pending" if actual_progress == 0 
+                            else "🕒 In Progress"
+                        )
+                        
+                        # Expected Progress
+                        expected_progress = 0
+                        if start and end and total_days:
+                            if reference_date <= start:
+                                expected_progress = 0
+                            elif reference_date > end:
+                                expected_progress = 1
                             else:
-                                conn.execute(text("""
-                                    INSERT INTO Milestone_Updates (milestone_id, week_ending_date, actual_progress)
-                                    VALUES (:mid, :week, :progress)
-                                """), {'mid': m_id, 'week': str(week_ending_date), 'progress': progress / 100})
-                        conn.commit()
-                        st.success("Milestone updates submitted successfully!")
-                    except Exception as e:
-                        st.error(f"Failed to submit milestone updates: {e}")
+                                days_passed = (reference_date - start).days
+                                expected_progress = days_passed / total_days
+                                
+                        # Progress Status (RAG)
+                        rag = (
+                            "" if not start or start > reference_date 
+                            else "🚩 Critical" if actual_progress < expected_progress - 0.2 
+                            else "⚠️ At Risk" if actual_progress < expected_progress - 0.05 
+                            else "✅ On Track"
+                        )
+                        
+                        progress_data.append({
+                            'milestone_id': m_id,
+                            'Milestone': label,
+                            'Actual Progress %': f"{actual_progress*100:.2f}%",
+                            'Current Status': current_status,
+                            'Expected Progress %': f"{expected_progress*100:.2f}%",
+                            'Progress Status (RAG)': rag
+                        })
+                    
+                    # Display calculated fields in a table
+                    if progress_data:
+                        st.table(pd.DataFrame(progress_data))
+                    
+                    submit_m_update = st.form_submit_button("Submit Milestone Update")
+                    if submit_m_update:
+                        try:
+                            for m_id, m_name, parent_id, start_str, end_str, total_days in milestones:
+                                actual_progress = st.session_state[f"progress_{m_id}"] / 100
+                                # Check if update already exists for this week
+                                existing = conn.execute(
+                                    text("SELECT 1 FROM Milestone_Updates WHERE milestone_id = :mid AND week_ending_date = :week"),
+                                    {'mid': m_id, 'week': str(week_ending_date)}
+                                ).fetchone()
+                                if existing:
+                                    conn.execute(
+                                        text("""
+                                            UPDATE Milestone_Updates 
+                                            SET actual_progress = :progress
+                                            WHERE milestone_id = :mid AND week_ending_date = :week
+                                        """),
+                                        {'progress': actual_progress, 'mid': m_id, 'week': str(week_ending_date)}
+                                    )
+                                else:
+                                    conn.execute(
+                                        text("""
+                                            INSERT INTO Milestone_Updates (milestone_id, week_ending_date, actual_progress)
+                                            VALUES (:mid, :week, :progress)
+                                        """),
+                                        {'mid': m_id, 'week': str(week_ending_date), 'progress': actual_progress}
+                                    )
+                            conn.commit()
+                            st.success("Milestone updates submitted successfully!")
+                        except Exception as e:
+                            st.error(f"Failed to submit milestone updates: {e}")
+                            raise
 
     # View Reports
     elif option == "View Reports":
@@ -758,7 +971,7 @@ else:
                             <p><strong>Team Size:</strong> {details['qe_team_size']}</p>
                             <h5>Current Week Task</h5>
                             <ul>
-                                {"".join([f"<li>{line.strip()}</li>" for line in (details['current_week_progress_entry'] or '').splitlines() if line.strip()]) or "<li>No tasks</li>"}
+                                {"".join([f"<li>{line.strip()}</li>" for line in (details['qe_current_week_task'] or '').splitlines() if line.strip()]) or "<li>No tasks</li>"}
                             </ul>
                             <h5>Automation Tools Used</h5>
                             <ul>
@@ -895,6 +1108,172 @@ else:
                     st.warning("No data found for the selected week/project.")
             except Exception as e:
                 st.error(f"Error generating report: {str(e)}")
+
+    # View Milestone Updates
+    elif option == "View Milestone Updates":
+        st.header("Milestone Updates Viewer")
+
+        with st.form("milestone_updates_form"):
+            week_ending_date = st.date_input("Select Week Ending Date")
+            projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
+            project_dict = {row.project_name: row.project_id for row in projects}
+            project_name = st.selectbox("Select Project", list(project_dict.keys()))
+            col1, col2 = st.columns(2)
+            with col1:
+                preview_updates = st.form_submit_button("Preview Updates")
+            with col2:
+                download_updates = st.form_submit_button("Download PDF")
+
+        if preview_updates or download_updates:
+            project_id = project_dict[project_name]
+            milestone_query = """
+                SELECT m.milestone_id, m.milestone_name, m.parent_milestone_id, m.planned_start_date, 
+                       m.planned_end_date, m.total_days, m.weightage, m.notes, mu.actual_progress
+                FROM Milestones m
+                LEFT JOIN Milestone_Updates mu ON m.milestone_id = mu.milestone_id 
+                AND CAST(mu.week_ending_date AS DATE) = :week
+                WHERE m.project_id = :pid
+                ORDER BY m.parent_milestone_id, m.milestone_id
+            """
+            params = {'week': str(week_ending_date), 'pid': project_id}
+            
+            try:
+                milestone_result = conn.execute(text(milestone_query), params)
+                milestones = milestone_result.fetchall()
+
+                if milestones:
+                    milestone_data = []
+                    for m in milestones:
+                        m_id, m_name, parent_id, start_str, end_str, total_days, weightage, notes, actual_progress = m
+                        actual_progress = actual_progress or 0.0
+                        start = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else None
+                        end = datetime.strptime(end_str, '%Y-%m-%d').date() if end_str else None
+                        reference_date = week_ending_date
+                        current_status = (
+                            "✅Completed" if actual_progress == 1 
+                            else "⏳ Pending" if actual_progress == 0 
+                            else "🕒 In Progress"
+                        )
+                        expected_progress = 0
+                        if start and end and total_days:
+                            if reference_date <= start:
+                                expected_progress = 0
+                            elif reference_date > end:
+                                expected_progress = 1
+                            else:
+                                days_passed = (reference_date - start).days
+                                expected_progress = days_passed / total_days
+                        rag = (
+                            "" if not start or start > reference_date 
+                            else "🚩 Critical" if actual_progress < expected_progress - 0.2 
+                            else "⚠️ At Risk" if actual_progress < expected_progress - 0.05 
+                            else "✅ On Track"
+                        )
+                        milestone_data.append({
+                            'milestone_id': m_id,
+                            'name': m_name,
+                            'parent_id': parent_id,
+                            'planned_start': start_str,
+                            'planned_end': end_str,
+                            'total_days': total_days,
+                            'weightage': weightage,
+                            'current_status': current_status,
+                            'actual_progress': actual_progress * 100,
+                            'expected_progress': expected_progress * 100,
+                            'rag': rag,
+                            'notes': notes
+                        })
+
+                    # Generate HTML for PDF
+                    html = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <style>
+                            body {{ font-family: Arial, sans-serif; margin: 20px; line-height: 1.5; }}
+                            h2 {{ color: #003366; margin-bottom: 10px; }}
+                            h4 {{ color: #004080; margin-top: 15px; margin-bottom: 8px; }}
+                            .header {{ text-align: center; margin-bottom: 20px; }}
+                            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                            th {{ background-color: #f2f2f2; }}
+                            .sub-milestone {{ padding-left: 20px; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h2>Milestone Updates for {project_name}</h2>
+                            <p>Week Ending: {week_ending_date.strftime('%Y-%m-%d')}</p>
+                        </div>
+                        <h4>Milestone Tracking</h4>
+                        <table>
+                            <tr>
+                                <th>Milestone</th>
+                                <th>Planned Start Date</th>
+                                <th>Planned End Date</th>
+                                <th>Total Days</th>
+                                <th>Weightage</th>
+                                <th>Current Status</th>
+                                <th>Actual Progress %</th>
+                                <th>Expected Progress %</th>
+                                <th>Progress Status (RAG)</th>
+                                <th>Notes</th>
+                            </tr>
+                            {''.join([
+                                f'<tr><td class="{"" if m["parent_id"] is None else "sub-milestone"}">{m["name"]}</td><td>{m["planned_start"]}</td><td>{m["planned_end"]}</td><td>{m["total_days"]}</td><td>{m["weightage"]*100 if m["weightage"] else ""}%</td><td>{m["current_status"]}</td><td>{m["actual_progress"]}%</td><td>{m["expected_progress"]}%</td><td>{m["rag"]}</td><td>{m["notes"]}</td></tr>'
+                                for m in milestone_data
+                            ]) or '<tr><td colspan="10">No milestone updates available</td></tr>'}
+                        </table>
+                    </body>
+                    </html>
+                    """
+
+                    # Generate PDF
+                    pdf_data = convert_html_to_pdf(html)
+
+                    if pdf_data:
+                        if preview_updates:
+                            # Display preview
+                            st.markdown("## 📝 Milestone Updates Preview")
+                            st.markdown(f"### {project_name}")
+                            st.markdown(f"**Week Ending**: {week_ending_date.strftime('%Y-%m-%d')}")
+                            st.subheader("Milestone Tracking")
+                            if milestone_data:
+                                df = pd.DataFrame([
+                                    {
+                                        'Milestone': m['name'] if m['parent_id'] is None else f"  - {m['name']}",
+                                        'Planned Start Date': m['planned_start'],
+                                        'Planned End Date': m['planned_end'],
+                                        'Total Days': m['total_days'],
+                                        'Weightage': f"{m['weightage']*100}%" if m['weightage'] else "",
+                                        'Current Status': m['current_status'],
+                                        'Actual Progress %': f"{m['actual_progress']}%",
+                                        'Expected Progress %': f"{m['expected_progress']}%",
+                                        'Progress Status (RAG)': m['rag'],
+                                        'Notes': m['notes']
+                                    } for m in milestone_data
+                                ])
+                                st.table(df)
+                            else:
+                                st.markdown("- No milestone updates available")
+                            
+                            st.markdown("---")
+                        
+                        # Always provide download option
+                        st.download_button(
+                            label="📄 Download PDF",
+                            data=pdf_data,
+                            file_name=f"Milestone_Updates_{project_name}_{week_ending_date.strftime('%Y%m%d')}.pdf",
+                            mime="application/pdf",
+                            key="milestone_download" if download_updates else "milestone_preview_download",
+                            on_click=lambda: None
+                        )
+                    else:
+                        st.error("Failed to generate PDF.")
+                else:
+                    st.warning("No milestone updates found for the selected project and week.")
+            except Exception as e:
+                st.error(f"Error retrieving milestone updates: {str(e)}")
 
     # Close database connection
     conn.close()
