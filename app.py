@@ -200,26 +200,26 @@ def init_db():
         tables_check = conn.execute(text("""
             SELECT TABLE_NAME 
             FROM INFORMATION_SCHEMA.TABLES 
-            WHERE TABLE_NAME IN ('qeUsers', 'qeProjects', 'qeWeekly_Updates', 'Milestones', 'Milestone_Updates')
+            WHERE TABLE_NAME IN ('Users', 'Projects', 'Weekly_Updates', 'Milestones', 'Milestone_Updates')
         """)).fetchall()
         existing_tables = [row[0] for row in tables_check]
         st.info(f"Existing tables: {existing_tables}")
 
-        # Create qeUsers table if it doesn't exist
-        if 'qeUsers' not in existing_tables:
+        # Create Users table if it doesn't exist
+        if 'Users' not in existing_tables:
             conn.execute(text("""
-                CREATE TABLE qeUsers (
+                CREATE TABLE Users (
                     user_id INT IDENTITY(1,1) PRIMARY KEY,
                     username NVARCHAR(50) UNIQUE NOT NULL,
                     password_hash NVARCHAR(255) NOT NULL
                 )
             """))
-            st.success("qeUsers table created successfully.")
+            st.success("Users table created successfully.")
 
-        # Create qeProjects table if it doesn't exist
-        if 'qeProjects' not in existing_tables:
+        # Create Projects table if it doesn't exist
+        if 'Projects' not in existing_tables:
             conn.execute(text("""
-                CREATE TABLE qeProjects (
+                CREATE TABLE Projects (
                     project_id INT IDENTITY(1,1) PRIMARY KEY,
                     project_name NVARCHAR(255) NOT NULL,
                     client NVARCHAR(255),
@@ -228,25 +228,25 @@ def init_db():
                     artifacts_link NVARCHAR(MAX)
                 )
             """))
-            st.success("qeProjects table created successfully.")
+            st.success("Projects table created successfully.")
         else:
-            # Validate qeProjects table schema
+            # Validate Projects table schema
             result = conn.execute(text("""
                 SELECT COLUMN_NAME 
                 FROM INFORMATION_SCHEMA.COLUMNS 
-                WHERE TABLE_NAME = 'qeProjects'
+                WHERE TABLE_NAME = 'Projects'
             """)).fetchall()
             expected_columns = ['project_id', 'project_name', 'client', 'project_spoc', 'technology_used', 'artifacts_link']
             actual_columns = [row[0] for row in result]
             if not all(col in actual_columns for col in expected_columns):
                 missing_columns = [col for col in expected_columns if col not in actual_columns]
-                st.error(f"qeProjects table is missing columns: {', '.join(missing_columns)}. Use the 'Admin: Fix qeProjects Table' option to correct the schema.")
-                raise Exception(f"qeProjects table schema validation failed: Missing columns {missing_columns}")
+                st.error(f"Projects table is missing columns: {', '.join(missing_columns)}. Use the 'Admin: Fix Projects Table' option to correct the schema.")
+                raise Exception(f"Projects table schema validation failed: Missing columns {missing_columns}")
 
-        # Create qeWeekly_Updates table if it doesn't exist
-        if 'qeWeekly_Updates' not in existing_tables:
+        # Create Weekly_Updates table if it doesn't exist
+        if 'Weekly_Updates' not in existing_tables:
             conn.execute(text("""
-                CREATE TABLE qeWeekly_Updates (
+                CREATE TABLE Weekly_Updates (
                     update_id INT IDENTITY(1,1) PRIMARY KEY,
                     project_id INT NOT NULL,
                     week_ending_date DATE,
@@ -267,10 +267,10 @@ def init_db():
                     sit_defects INT,
                     uat_defects INT,
                     reopened_defects INT,
-                    FOREIGN KEY (project_id) REFERENCES qeProjects(project_id)
+                    FOREIGN KEY (project_id) REFERENCES Projects(project_id)
                 )
             """))
-            st.success("qeWeekly_Updates table created successfully.")
+            st.success("Weekly_Updates table created successfully.")
 
         # Create Milestones table if it doesn't exist
         if 'Milestones' not in existing_tables:
@@ -285,7 +285,7 @@ def init_db():
                     total_days INT NOT NULL,
                     weightage FLOAT NOT NULL,
                     notes NVARCHAR(MAX),
-                    FOREIGN KEY (project_id) REFERENCES qeProjects(project_id),
+                    FOREIGN KEY (project_id) REFERENCES Projects(project_id),
                     FOREIGN KEY (parent_milestone_id) REFERENCES Milestones(milestone_id),
                     CONSTRAINT CHK_Dates CHECK (planned_start_date <= planned_end_date),
                     CONSTRAINT CHK_TotalDays CHECK (total_days >= 0),
@@ -331,7 +331,7 @@ def verify_password(password, password_hash):
 def check_credentials(username, password, conn):
     try:
         result = conn.execute(
-            text("SELECT password_hash FROM qeUsers WHERE username = :username"),
+            text("SELECT password_hash FROM Users WHERE username = :username"),
             {'username': username}
         ).fetchone()
         if result and verify_password(password, result[0]):
@@ -385,7 +385,7 @@ if not st.session_state.authenticated:
                     try:
                         password_hash = hash_password(new_password)
                         conn.execute(
-                            text("INSERT INTO qeUsers (username, password_hash) VALUES (:username, :password_hash)"),
+                            text("INSERT INTO Users (username, password_hash) VALUES (:username, :password_hash)"),
                             {'username': new_username, 'password_hash': password_hash}
                         )
                         conn.commit()
@@ -393,11 +393,11 @@ if not st.session_state.authenticated:
                     except Exception as e:
                         st.error(f"Failed to add user: {e}")
     
-    # Admin option to fix qeProjects table
-    with st.expander("Admin: Fix qeProjects Table"):
+    # Admin option to fix Projects table
+    with st.expander("Admin: Fix Projects Table"):
         with st.form("fix_projects_form"):
             auth_code = st.text_input("Authentication Code", type="password")
-            fix_button = st.form_submit_button("Fix qeProjects Table")
+            fix_button = st.form_submit_button("Fix Projects Table")
             
             if fix_button:
                 if not auth_code:
@@ -407,14 +407,14 @@ if not st.session_state.authenticated:
                 else:
                     try:
                         # Drop dependent tables first due to foreign key constraints
-                        conn.execute(text("DROP TABLE IF EXISTS qeWeekly_Updates"))
+                        conn.execute(text("DROP TABLE IF EXISTS Weekly_Updates"))
                         conn.execute(text("DROP TABLE IF EXISTS Milestones"))
                         conn.execute(text("DROP TABLE IF EXISTS Milestone_Updates"))
-                        conn.execute(text("DROP TABLE IF EXISTS qeProjects"))
+                        conn.execute(text("DROP TABLE IF EXISTS Projects"))
                         
-                        # Recreate qeProjects table
+                        # Recreate Projects table
                         conn.execute(text("""
-                            CREATE TABLE qeProjects (
+                            CREATE TABLE Projects (
                                 project_id INT IDENTITY(1,1) PRIMARY KEY,
                                 project_name NVARCHAR(255) NOT NULL,
                                 client NVARCHAR(255),
@@ -423,9 +423,9 @@ if not st.session_state.authenticated:
                                 artifacts_link NVARCHAR(MAX)
                             )
                         """))
-                        # Recreate qeWeekly_Updates table
+                        # Recreate Weekly_Updates table
                         conn.execute(text("""
-                            CREATE TABLE qeWeekly_Updates (
+                            CREATE TABLE Weekly_Updates (
                                 update_id INT IDENTITY(1,1) PRIMARY KEY,
                                 project_id INT NOT NULL,
                                 week_ending_date DATE,
@@ -446,7 +446,7 @@ if not st.session_state.authenticated:
                                 sit_defects INT,
                                 uat_defects INT,
                                 reopened_defects INT,
-                                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id)
+                                FOREIGN KEY (project_id) REFERENCES Projects(project_id)
                             )
                         """))
                         # Recreate Milestones table
@@ -461,7 +461,7 @@ if not st.session_state.authenticated:
                                 total_days INT NOT NULL,
                                 weightage FLOAT NOT NULL,
                                 notes NVARCHAR(MAX),
-                                FOREIGN KEY (project_id) REFERENCES qeProjects(project_id),
+                                FOREIGN KEY (project_id) REFERENCES Projects(project_id),
                                 FOREIGN KEY (parent_milestone_id) REFERENCES Milestones(milestone_id),
                                 CONSTRAINT CHK_Dates CHECK (planned_start_date <= planned_end_date),
                                 CONSTRAINT CHK_TotalDays CHECK (total_days >= 0),
@@ -480,9 +480,9 @@ if not st.session_state.authenticated:
                             )
                         """))
                         conn.commit()
-                        st.success("qeProjects table and dependent tables recreated successfully.")
+                        st.success("Projects table and dependent tables recreated successfully.")
                     except Exception as e:
-                        st.error(f"Failed to recreate qeProjects table: {e}")
+                        st.error(f"Failed to recreate Projects table: {e}")
     
     conn.close()
     engine.dispose()
@@ -526,7 +526,7 @@ else:
                     try:
                         conn.execute(text("SELECT 1"))
                         insert_stmt = text("""
-                            INSERT INTO qeProjects (project_name, client, project_spoc, technology_used, artifacts_link)
+                            INSERT INTO Projects (project_name, client, project_spoc, technology_used, artifacts_link)
                             OUTPUT INSERTED.project_id
                             VALUES (:name, :client, :spoc, :tech, :link)
                         """)
@@ -546,13 +546,13 @@ else:
                             st.success(f"Project added successfully with project_id: {project_id}")
                     except Exception as e:
                         st.error(f"Failed to add project: {e}")
-                        st.write("Debug Info: Check if 'qeProjects' table exists and has an auto-incrementing 'project_id' column.")
+                        st.write("Debug Info: Check if 'Projects' table exists and has an auto-incrementing 'project_id' column.")
                         raise
 
     # Submit Weekly Update
     elif option == "Submit Weekly Update":
         st.header("Weekly QE Update")
-        projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
+        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
 
         if not project_dict:
@@ -592,7 +592,7 @@ else:
                     try:
                         project_id = project_dict[project_name]
                         insert_update = text("""
-                            INSERT INTO qeWeekly_Updates (
+                            INSERT INTO Weekly_Updates (
                                 project_id, week_ending_date, qe_overall_status, qe_progress_percentage,
                                 current_week_progress_entry, next_release_date, qe_team_size,
                                 qe_current_week_task, qe_automation_tools_used, tc_created,
@@ -639,7 +639,7 @@ else:
     # Add Milestone
     elif option == "Add Milestone":
         st.header("Add New Milestone")
-        projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
+        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
         if not project_dict:
             st.error("No projects found. Please add a project first.")
@@ -690,7 +690,7 @@ else:
     # Submit Milestone Update
     elif option == "Submit Milestone Update":
         st.header("Submit Milestone Weekly Update")
-        projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
+        projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
         project_dict = {row.project_name: row.project_id for row in projects}
         if not project_dict:
             st.error("No projects found. Please add a project first.")
@@ -812,7 +812,7 @@ else:
         with st.form("report_form"):
             report_type = st.selectbox("Report Type", ["Weekly Summary", "Project History"])
             week_ending_date = st.date_input("Select Week Ending Date")
-            projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
+            projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
             project_dict = {row.project_name: row.project_id for row in projects}
             project_name = st.selectbox("Select Project (Optional)", ["All"] + list(project_dict.keys()))
             col1, col2 = st.columns(2)
@@ -829,8 +829,8 @@ else:
                        w.tc_created, w.tc_executed, w.tc_passed_first_round, w.effort_tc_execution,
                        w.tc_automated, w.effort_tc_automation,
                        w.defects_raised_internal, w.sit_defects, w.uat_defects, w.reopened_defects
-                FROM qeWeekly_Updates w
-                JOIN qeProjects p ON w.project_id = p.project_id
+                FROM Weekly_Updates w
+                JOIN Projects p ON w.project_id = p.project_id
                 WHERE CAST(w.week_ending_date AS DATE) = :week
             """
             params = {'week': str(week_ending_date)}
@@ -1115,7 +1115,7 @@ else:
 
         with st.form("milestone_updates_form"):
             week_ending_date = st.date_input("Select Week Ending Date")
-            projects = conn.execute(text("SELECT project_id, project_name FROM qeProjects")).fetchall()
+            projects = conn.execute(text("SELECT project_id, project_name FROM Projects")).fetchall()
             project_dict = {row.project_name: row.project_id for row in projects}
             project_name = st.selectbox("Select Project", list(project_dict.keys()))
             col1, col2 = st.columns(2)
